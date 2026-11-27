@@ -46,7 +46,11 @@ plan on rebuilding an old staging tag.
 1. Choose the staging tag to ship, and note its RC (say `0.20.0-rc.4`).
 2. Ask MDK to promote **that** RC to Stable, or confirm they already have. If MDK promoted a
    different RC, the Stable binary isn't the one testers ran: pin that RC on `develop`, cut and
-   test a new staging build, and start again.
+   test a new staging build, and start again. If `develop` has already moved past the promoted RC
+   (for example `develop` pins `rc.5` while MDK promoted `rc.4`), `sync-rc` only moves forward and
+   a staging database migrated by `rc.5` may reject the older build — cut and test the promoted RC
+   from a staging tag that pinned it (or an isolated branch and clean staging install) rather than
+   downgrading migrated staging data.
 3. Branch from the staging tag (`release/X.Y.Z`), bump `MARKETING_VERSION` and
    `CURRENT_PROJECT_VERSION` if needed (see [docs/releases.md](releases.md)), run
    `just promote-stable` (`./scripts/promote-stable.sh`), and open a PR into `master`.

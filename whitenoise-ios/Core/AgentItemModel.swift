@@ -390,6 +390,18 @@ nonisolated enum AgentItemBody: Equatable, Sendable, CustomDebugStringConvertibl
         var isAnsweredByMessage: Bool { answerVia == "message" }
         var hasSecretQuestion: Bool { questions.contains(where: \.secret) }
 
+        /// Secret answers must never be sent into a multi-person chat or into
+        /// ordinary chat messages (`answer_via == "message"`).
+        func requiresTerminalForSecrets(isTwoPersonChat: Bool) -> Bool {
+            hasSecretQuestion && (!isTwoPersonChat || isAnsweredByMessage)
+        }
+
+        /// Fail closed: if the asked-question metadata is missing, treat the
+        /// settled answer as secret so its text is never displayed.
+        func isAnswerSecret(_ answer: AnsweredQuestion) -> Bool {
+            questions.first(where: { $0.id == answer.question })?.secret != false
+        }
+
         enum CodingKeys: String, CodingKey {
             case answerVia = "answer_via"
             case subject, questions, answer
@@ -1049,5 +1061,54 @@ nonisolated struct AgentSubagentThreadIndex: Equatable, Sendable {
             hiddenFromMainTimeline: hiddenFromMain,
             summariesByTaskMessageId: summaries
         )
+    }
+}
+
+// MARK: - Composer Draft Insertion & Session Target Resolution
+
+/// Pure helper keeping agent slash-command and option-button insertions from
+/// overwriting unsent drafts or active message edits.
+nonisolated enum AgentDraftInsertion {
+    static func inserting(
+        _ text: String,
+        into currentDraft: String,
+        isEditingMessage: Bool
+    ) -> String? {
+        guard !isEditingMessage else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if currentDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return text
+        }
+        if currentDraft.last?.isWhitespace == true {
+            return currentDraft + text
+        }
+        return currentDraft + "\n" + text
+    }
+}
+
+/// Resolves which agent session `AgentSessionControlsSheet` should control
+/// without silently redirecting a chosen agent to a different one when its
+/// session leaves the loaded timeline.
+nonisolated enum AgentSessionSelection: Equatable, Sendable {
+    case selected(AgentItemProjection)
+    case unavailable(targetPubkeyHex: String, alternatives: [AgentItemProjection])
+    case empty
+
+    static func resolve(
+        sessions: [AgentItemProjection],
+        selectedAgentPubkeyHex: String?,
+        initialAgentPubkeyHex: String?
+    ) -> AgentSessionSelection {
+        if let target = selectedAgentPubkeyHex ?? initialAgentPubkeyHex {
+            if let match = sessions.first(where: { $0.sender == target }) {
+                return .selected(match)
+            }
+            return .unavailable(targetPubkeyHex: target, alternatives: sessions)
+        }
+        if let last = sessions.last {
+            return .selected(last)
+        }
+        return .empty
     }
 }

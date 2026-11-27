@@ -132,15 +132,21 @@ if [[ $FORCE -eq 0 ]]; then
     python3 -I - "${pinned_tag#marmotkit-v}" "$VERSION" <<'PYORDER'
 import re, sys
 def key(v):
-    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-(nightly|rc)\.(\d+))?", v)
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-(nightly|rc)\.([0-9A-Za-z._-]+))?", v)
     if not m:
         return None
-    major, minor, patch, pre, n = m.groups()
+    major, minor, patch, pre, suffix = m.groups()
+    if pre == "rc" and not suffix.isdigit():
+        return None
     # A nightly of X.Y.Z predates its RCs; a Stable outranks both.
     rank = {"nightly": 0, "rc": 1, None: 2}[pre]
-    return (int(major), int(minor), int(patch), rank, int(n or 0))
+    num = int(suffix) if (suffix and suffix.isdigit()) else 0
+    return (int(major), int(minor), int(patch), rank, num)
 pinned, latest = key(sys.argv[1]), key(sys.argv[2])
-if pinned is not None and latest < pinned:
+if pinned is None:
+    print(f"error: cannot order pinned version {sys.argv[1]} against latest RC {sys.argv[2]}; pass --force to replace it", file=sys.stderr)
+    sys.exit(1)
+if latest < pinned:
     print(f"error: the latest RC {sys.argv[2]} is older than the pinned {sys.argv[1]}; pass --force to downgrade", file=sys.stderr)
     sys.exit(1)
 PYORDER

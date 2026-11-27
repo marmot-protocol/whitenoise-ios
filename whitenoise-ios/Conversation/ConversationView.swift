@@ -1517,7 +1517,7 @@ struct ConversationView: View {
                         viewModel: viewModel,
                         initialAgentPubkeyHex: target.agentPubkeyHex
                     ) { text in
-                        composer.draft = text
+                        insertAgentDraftText(text)
                     }
                     .appAppearance()
                 }
@@ -1533,7 +1533,7 @@ struct ConversationView: View {
                         },
                         onInsertDraftText: { text in
                             agentSubagentThreadTarget = nil
-                            composer.draft = text
+                            insertAgentDraftText(text)
                         }
                     )
                     .appAppearance()
@@ -2757,7 +2757,7 @@ struct ConversationView: View {
                         agentSubagentThreadTarget = AgentSubagentThreadTarget(taskMessageIdHex: task.messageIdHex)
                     },
                     onInsertDraftText: { text in
-                        composer.draft = text
+                        insertAgentDraftText(text)
                     },
                     debugStyle: appState.streamingDebugEnabled ? MessageSemantics.debugStyle(for: record) : nil
                 )
@@ -2791,6 +2791,17 @@ struct ConversationView: View {
         case .systemEvent(let event):
             SystemEventRow(event: event)
         }
+    }
+
+    private func insertAgentDraftText(_ text: String) {
+        guard let updated = AgentDraftInsertion.inserting(
+            text,
+            into: composer.draft,
+            isEditingMessage: composer.editSession != nil
+        ) else {
+            return
+        }
+        composer.draft = updated
     }
 
     @ViewBuilder

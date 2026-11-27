@@ -14,14 +14,16 @@ for the `develop` RC → staging tag → `release/X.Y.Z` → Stable promotion fl
 2. Set `MARKETING_VERSION` and increment `CURRENT_PROJECT_VERSION` consistently
    for the app and Notification Service Extension, in production and staging.
    Unit-test target versions are independent.
-3. Swap the staging RC pin for the Stable MarmotKit release MDK promoted from
-   it using `just promote-stable` (`./scripts/promote-stable.sh`), and commit
-   its generated Swift source, package binary pin/checksum, and provenance
-   together. `promote-stable` refuses any Stable release not promoted from the
-   tested RC. If the release advances the account storage schema (see the
-   release's MDK integration guide), run "In-place MarmotKit upgrade" in
-   `docs/manual-tests.md` on a device before release, and record its results in
-   the release issue or PR.
+3. For an RC-based release branched from a staging tag, swap the staging RC pin
+   for the Stable MarmotKit release MDK promoted from it using
+   `just promote-stable` (`./scripts/promote-stable.sh`), and commit its
+   generated Swift source, package binary pin/checksum, and provenance together.
+   `promote-stable` refuses any Stable release not promoted from the tested RC.
+   (For a hotfix branched from a Stable `master` tag, keep the existing Stable
+   pin and skip `promote-stable`.) If the release advances the account storage
+   schema (see the release's MDK integration guide), run "In-place MarmotKit
+   upgrade" in `docs/manual-tests.md` on a device before release, and record its
+   results in the release issue or PR.
 4. Run `just precommit` (lint, MarmotKit provenance and channel checks, and the
    simulator test suite), a production Release device build, and
    `git diff --check` as described in `AGENTS.md`. Record results and whether

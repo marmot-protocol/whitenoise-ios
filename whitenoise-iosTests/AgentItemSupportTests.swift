@@ -522,6 +522,134 @@ struct AgentItemSupportTests {
         #expect(viewModel.waitingAgentSubagents.map(\.waiting.messageIdHex) == [childApprovalId])
     }
 
+    // MARK: - CodeRabbit regressions: secret questions, draft insertion, session target, ambiguous sends
+
+    @Test func secretQuestionWithMessageAnswerRequiresTerminalAndMissingMetadataFailsClosed() {
+        let secretViaMessage = AgentItemBody.Question(
+            answerVia: "message",
+            questions: [.init(id: "q1", text: "API key", secret: true)],
+            answer: [.init(question: "q1", text: "sk-secret")]
+        )
+        #expect(secretViaMessage.requiresTerminalForSecrets(isTwoPersonChat: true))
+        #expect(secretViaMessage.requiresTerminalForSecrets(isTwoPersonChat: false))
+        #expect(secretViaMessage.isAnswerSecret(.init(question: "q1", text: "sk-secret")))
+
+        let secretViaRequest = AgentItemBody.Question(
+            answerVia: "request",
+            questions: [.init(id: "q1", text: "API key", secret: true)]
+        )
+        #expect(!secretViaRequest.requiresTerminalForSecrets(isTwoPersonChat: true))
+        #expect(secretViaRequest.requiresTerminalForSecrets(isTwoPersonChat: false))
+
+        let missingMetadata = AgentItemBody.Question(
+            answerVia: "request",
+            questions: [.init(id: "q-nonsecret", text: "Env", secret: false)],
+            answer: [.init(question: "q-missing", text: "leaked")]
+        )
+        #expect(missingMetadata.isAnswerSecret(.init(question: "q-missing", text: "leaked")))
+        #expect(!missingMetadata.isAnswerSecret(.init(question: "q-nonsecret", text: "prod")))
+    }
+
+    @Test func agentDraftInsertionPreservesNonEmptyDraftAndSkipsActiveEdits() {
+        #expect(AgentDraftInsertion.inserting("/compact", into: "", isEditingMessage: false) == "/compact")
+        #expect(AgentDraftInsertion.inserting("/compact", into: "   ", isEditingMessage: false) == "/compact")
+        #expect(AgentDraftInsertion.inserting("/compact", into: "existing note", isEditingMessage: false) == "existing note\n/compact")
+        #expect(AgentDraftInsertion.inserting("/compact", into: "existing ", isEditingMessage: false) == "existing /compact")
+        #expect(AgentDraftInsertion.inserting("/compact", into: "editing old msg", isEditingMessage: true) == nil)
+        #expect(AgentDraftInsertion.inserting("   ", into: "", isEditingMessage: false) == nil)
+    }
+
+    @Test func agentSessionSelectionDoesNotSilentlySwitchWhenTargetLeavesTimeline() {
+        let agentA = hex("aa")
+        let agentB = hex("bb")
+        let sessionB = AgentItemProjection.parse(
+            messageIdHex: hex("02"),
+            sender: agentB,
+            item: makeAgentItem(itemType: "session", state: .running, title: "Session B", fieldsJson: #"{"type":"session","body":{}}"#),
+            firstEventMissing: false,
+            thread: nil,
+            plaintext: "",
+            tags: []
+        )
+
+        #expect(
+            AgentSessionSelection.resolve(sessions: [sessionB], selectedAgentPubkeyHex: nil, initialAgentPubkeyHex: nil)
+                == .selected(sessionB)
+        )
+        #expect(
+            AgentSessionSelection.resolve(sessions: [sessionB], selectedAgentPubkeyHex: nil, initialAgentPubkeyHex: agentA)
+                == .unavailable(targetPubkeyHex: agentA, alternatives: [sessionB])
+        )
+        #expect(
+            AgentSessionSelection.resolve(sessions: [sessionB], selectedAgentPubkeyHex: agentB, initialAgentPubkeyHex: agentA)
+                == .selected(sessionB)
+        )
+        #expect(
+            AgentSessionSelection.resolve(sessions: [], selectedAgentPubkeyHex: nil, initialAgentPubkeyHex: nil)
+                == .empty
+        )
+    }
+
+    @MainActor
+    @Test func agentInteractionStoreKeepsAmbiguousErrorPendingAndProbesStatusBeforeRetry() async throws {
+        let store = AgentInteractionStore()
+        let agent = hex("aa")
+        let me = hex("22")
+        let key = AgentInteractionStore.newSessionKey(agentPubkeyHex: agent)
+        let payload = AgentRequestBuilder.newSession(agentPubkeyHex: agent)
+
+        var sendCount = 0
+        var probeStatus: LocalSendStatusFfi?
+        do {
+            _ = try await store.submit(
+                key: key,
+                targetEventIdHex: nil,
+                summary: "New Session",
+                senderAccountIdHex: me,
+                payload: payload,
+                checkStatus: { _ in probeStatus }
+            ) { _, _ in
+                sendCount += 1
+                throw CancellationError()
+            }
+            Issue.record("Expected CancellationError to rethrow when status is unknown")
+        } catch is CancellationError {}
+
+        // Still pending while status is unknown, and a duplicate tap must not mint a second send.
+        #expect(store.isPending(key: key))
+        #expect(store.pendingRequest(forKey: key)?.statusUnknown == true)
+        _ = try await store.submit(
+            key: key,
+            targetEventIdHex: nil,
+            summary: "New Session",
+            senderAccountIdHex: me,
+            payload: payload,
+            checkStatus: { _ in nil }
+        ) { _, _ in
+            sendCount += 1
+            return LocalSendAcceptanceFfi(clientToken: "t2", messageIdHex: hex("77"))
+        }
+        #expect(sendCount == 1)
+
+        // Once MDK confirms rejection, a fresh submission is allowed.
+        probeStatus = .rejected
+        let retriedId = hex("88")
+        let accepted = try await store.submit(
+            key: key,
+            targetEventIdHex: nil,
+            summary: "New Session",
+            senderAccountIdHex: me,
+            payload: payload,
+            checkStatus: { _ in probeStatus }
+        ) { _, token in
+            sendCount += 1
+            return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: retriedId)
+        }
+        #expect(sendCount == 2)
+        #expect(accepted?.messageIdHex == retriedId)
+        #expect(store.pendingRequest(forKey: key)?.statusUnknown == false)
+    }
+
     // MARK: - Helpers
 
     private func makeAgentItem(

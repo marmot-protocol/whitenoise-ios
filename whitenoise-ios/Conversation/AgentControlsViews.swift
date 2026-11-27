@@ -134,26 +134,28 @@ struct AgentSessionControlsSheet: View {
         viewModel.latestAgentSessions
     }
 
-    private var activeSessionProjection: AgentItemProjection? {
-        if let target = selectedAgentPubkeyHex ?? initialAgentPubkeyHex,
-           let match = sessions.first(where: { $0.sender == target }) {
-            return match
-        }
-        return sessions.last
+    private var sessionSelection: AgentSessionSelection {
+        AgentSessionSelection.resolve(
+            sessions: sessions,
+            selectedAgentPubkeyHex: selectedAgentPubkeyHex,
+            initialAgentPubkeyHex: initialAgentPubkeyHex
+        )
     }
 
     var body: some View {
         NavigationStack {
             Group {
-                if let projection = activeSessionProjection,
-                   case .session(let session) = projection.body {
-                    sessionForm(projection: projection, session: session)
-                } else {
-                    ContentUnavailableView(
-                        L10n.string("No active agent session"),
-                        systemImage: "cpu",
-                        description: Text(L10n.string("Agent settings and actions will appear here once an agent starts a session."))
-                    )
+                switch sessionSelection {
+                case .selected(let projection):
+                    if case .session(let session) = projection.body {
+                        sessionForm(projection: projection, session: session)
+                    } else {
+                        noActiveSessionView
+                    }
+                case .unavailable(let target, let alternatives):
+                    unavailableSessionView(targetPubkeyHex: target, alternatives: alternatives)
+                case .empty:
+                    noActiveSessionView
                 }
             }
             .navigationTitle(L10n.string("Agent Controls"))
@@ -190,6 +192,47 @@ struct AgentSessionControlsSheet: View {
                 }
                 Button(L10n.string("Cancel"), role: .cancel) {
                     editingSetting = nil
+                }
+            }
+        }
+    }
+
+    private var noActiveSessionView: some View {
+        ContentUnavailableView(
+            L10n.string("No active agent session"),
+            systemImage: "cpu",
+            description: Text(L10n.string("Agent settings and actions will appear here once an agent starts a session."))
+        )
+    }
+
+    private func unavailableSessionView(
+        targetPubkeyHex: String,
+        alternatives: [AgentItemProjection]
+    ) -> some View {
+        Form {
+            Section {
+                ContentUnavailableView(
+                    L10n.string("No active agent session"),
+                    systemImage: "cpu",
+                    description: Text(viewModel.windowDisplayName(for: targetPubkeyHex))
+                )
+            }
+            if !alternatives.isEmpty {
+                Section(L10n.string("Agent")) {
+                    ForEach(alternatives, id: \.sender) { item in
+                        Button {
+                            selectedAgentPubkeyHex = item.sender
+                        } label: {
+                            HStack {
+                                Text(viewModel.windowDisplayName(for: item.sender))
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
             }
         }

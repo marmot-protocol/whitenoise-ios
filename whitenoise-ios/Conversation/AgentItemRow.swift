@@ -580,7 +580,7 @@ struct AgentItemRow: View {
     private func questionBody(_ question: AgentItemBody.Question) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             if projection.item.state == .waiting {
-                if question.hasSecretQuestion && !isTwoPersonChat {
+                if question.requiresTerminalForSecrets(isTwoPersonChat: isTwoPersonChat) {
                     ForEach(question.questions) { asked in
                         askedQuestionPrompt(asked)
                     }
@@ -765,7 +765,7 @@ struct AgentItemRow: View {
             if let answers = question.answer, !answers.isEmpty {
                 ForEach(Array(answers.enumerated()), id: \.offset) { _, ans in
                     let asked = question.questions.first(where: { $0.id == ans.question })
-                    if asked?.secret == true {
+                    if question.isAnswerSecret(ans) {
                         Text(L10n.string("Answered (secret)"))
                             .font(.caption)
                             .foregroundStyle(.secondary)

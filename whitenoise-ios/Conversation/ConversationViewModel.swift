@@ -2634,7 +2634,14 @@ final class ConversationViewModel {
                 targetEventIdHex: targetEventIdHex,
                 summary: summary,
                 senderAccountIdHex: senderId,
-                payload: payload
+                payload: payload,
+                checkStatus: { token in
+                    try await client.localSendStatus(
+                        accountRef: accountRef,
+                        groupIdHex: groupIdHex,
+                        clientToken: token
+                    )
+                }
             ) { request, token in
                 try await client.sendCustomEventWithClientToken(
                     accountRef: accountRef,
