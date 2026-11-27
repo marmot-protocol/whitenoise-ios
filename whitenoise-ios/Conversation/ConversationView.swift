@@ -1946,7 +1946,7 @@ struct ConversationView: View {
                             showsAgentName: !viewModel.groupDisplay.isDirectMessage,
                             agentDisplayName: { viewModel.windowDisplayName(for: $0) },
                             isStopPending: { turn in
-                                viewModel.agentInteractions.isPending(
+                                viewModel.agentInteractions.isControlDisabled(
                                     key: AgentInteractionStore.stopKey(
                                         agentPubkeyHex: turn.sender,
                                         targetEventIdHex: turn.messageIdHex
@@ -2714,7 +2714,7 @@ struct ConversationView: View {
                     isTwoPersonChat: viewModel.isTwoPersonChat,
                     canInteract: viewModel.canSendMessages && !isSelectingMessages,
                     pendingRequest: viewModel.agentInteractions.pendingRequest(forItemEventId: agentProjection.messageIdHex),
-                    stopPending: viewModel.agentInteractions.isPending(
+                    stopPending: viewModel.agentInteractions.isControlDisabled(
                         key: AgentInteractionStore.stopKey(
                             agentPubkeyHex: agentProjection.sender,
                             targetEventIdHex: agentProjection.messageIdHex
@@ -2758,6 +2758,9 @@ struct ConversationView: View {
                     },
                     onInsertDraftText: { text in
                         insertAgentDraftText(text)
+                    },
+                    onRecheckPendingStatus: { key in
+                        Task { await viewModel.recheckAgentRequestStatus(forKey: key) }
                     },
                     debugStyle: appState.streamingDebugEnabled ? MessageSemantics.debugStyle(for: record) : nil
                 )

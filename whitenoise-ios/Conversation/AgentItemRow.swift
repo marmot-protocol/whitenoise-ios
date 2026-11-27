@@ -20,6 +20,7 @@ struct AgentItemRow: View {
     let onOpenSessionControls: (AgentItemProjection) -> Void
     let onOpenSubagentThread: (AgentItemProjection) -> Void
     let onInsertDraftText: (String) -> Void
+    var onRecheckPendingStatus: (String) -> Void = { _ in }
     var debugStyle: MessageDebugStyle? = nil
 
     @State private var isExpanded = false
@@ -509,7 +510,7 @@ struct AgentItemRow: View {
 
             if projection.item.state == .waiting {
                 if let pending = pendingRequest, !pending.sendFailed {
-                    pendingStatusRow(label: pending.summary)
+                    pendingStatusRow(pending)
                 } else if canInteract {
                     if pendingRequest?.sendFailed == true {
                         Text(L10n.string("Couldn't send answer. Try again."))
@@ -634,7 +635,7 @@ struct AgentItemRow: View {
                     ForEach(question.questions) { asked in
                         askedQuestionPrompt(asked)
                     }
-                    pendingStatusRow(label: pending.summary)
+                    pendingStatusRow(pending)
                 } else if canInteract {
                     if pendingRequest?.sendFailed == true {
                         Text(L10n.string("Couldn't send answer. Try again."))
@@ -862,7 +863,7 @@ struct AgentItemRow: View {
             }
             if case .approval(let approval) = waiting.body {
                 if let pending = pendingForSubagentItem(waiting.messageIdHex), !pending.sendFailed {
-                    pendingStatusRow(label: pending.summary)
+                    pendingStatusRow(pending)
                 } else if canInteract {
                     HStack(spacing: 6) {
                         ForEach(approval.choices.prefix(2)) { choice in
@@ -914,12 +915,21 @@ struct AgentItemRow: View {
 
     // MARK: - Shared subviews & helpers
 
-    private func pendingStatusRow(label: String) -> some View {
+    private func pendingStatusRow(_ pending: AgentInteractionStore.PendingRequest) -> some View {
         HStack(spacing: 8) {
-            ProgressView().controlSize(.small)
-            Text(L10n.formatted("Pending: %@", label))
+            if !pending.statusUnknown {
+                ProgressView().controlSize(.small)
+            }
+            Text(L10n.formatted("Pending: %@", pending.summary))
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
+            if pending.statusUnknown, canInteract {
+                Spacer(minLength: 4)
+                Button(L10n.string("Retry")) {
+                    onRecheckPendingStatus(pending.key)
+                }
+                .font(.caption.weight(.semibold))
+            }
         }
         .padding(.vertical, 4)
     }

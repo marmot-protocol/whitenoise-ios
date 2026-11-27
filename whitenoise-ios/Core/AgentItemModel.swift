@@ -578,20 +578,7 @@ nonisolated enum AgentItemBody: Equatable, Sendable, CustomDebugStringConvertibl
 
     private struct Envelope: Decodable {
         let type: String
-        let body: AnyDecodableBody?
-
-        enum CodingKeys: String, CodingKey {
-            case type, body
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            type = try container.decode(String.self, forKey: .type)
-            body = nil
-        }
     }
-
-    private struct AnyDecodableBody: Decodable {}
 
     private struct TypedEnvelope<T: Decodable>: Decodable {
         let type: String
@@ -953,13 +940,20 @@ nonisolated struct AgentSubagentThreadIndex: Equatable, Sendable {
         orderedMessageIds: [String],
         agentItemsByMessageId: [String: AgentItemProjection],
         threadRefByMessageId: [String: TimelineThreadRefFfi],
-        senderByMessageId: [String: String]
+        senderByMessageId: [String: String],
+        blockedSenders: Set<String> = []
     ) -> AgentSubagentThreadIndex {
+        func isBlocked(_ sender: String) -> Bool {
+            !blockedSenders.isEmpty && blockedSenders.contains(sender.lowercased())
+        }
         // 1. Identify all loaded subagent `task` items.
         var subagentTaskIds: Set<String> = []
         var taskMessageIdBySenderAndItemId: [String: String] = [:]
         for messageId in orderedMessageIds {
-            guard let projection = agentItemsByMessageId[messageId], projection.isSubagentTask else { continue }
+            guard let projection = agentItemsByMessageId[messageId],
+                  projection.isSubagentTask,
+                  !isBlocked(projection.sender)
+            else { continue }
             subagentTaskIds.insert(messageId)
             taskMessageIdBySenderAndItemId["\(projection.sender)|\(projection.item.itemId)"] = messageId
         }
@@ -1024,6 +1018,9 @@ nonisolated struct AgentSubagentThreadIndex: Equatable, Sendable {
         for messageId in orderedMessageIds {
             guard let ownerTask = directParentTaskByMessageId[messageId] else { continue }
             hiddenFromMain.insert(messageId)
+            if let sender = senderByMessageId[messageId], isBlocked(sender) {
+                continue
+            }
             directChildren[ownerTask, default: []].append(messageId)
 
             let waitingProjection: AgentItemProjection? = {

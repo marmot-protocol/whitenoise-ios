@@ -240,7 +240,7 @@ struct AgentSessionControlsSheet: View {
 
     private func sessionForm(projection: AgentItemProjection, session: AgentItemBody.Session) -> some View {
         let agent = projection.sender
-        let newSessionPending = viewModel.agentInteractions.isPending(
+        let newSessionPending = viewModel.agentInteractions.isControlDisabled(
             key: AgentInteractionStore.newSessionKey(agentPubkeyHex: agent)
         )
         return Form {
@@ -290,7 +290,7 @@ struct AgentSessionControlsSheet: View {
             if !session.settings.isEmpty {
                 Section(L10n.string("Settings")) {
                     ForEach(session.settings) { setting in
-                        let pending = viewModel.agentInteractions.isPending(
+                        let pending = viewModel.agentInteractions.isControlDisabled(
                             key: AgentInteractionStore.setSettingKey(agentPubkeyHex: agent, settingId: setting.id)
                         )
                         if let options = setting.options, !options.isEmpty {
@@ -332,7 +332,7 @@ struct AgentSessionControlsSheet: View {
             if !session.actions.isEmpty {
                 Section(L10n.string("Actions")) {
                     ForEach(session.actions) { action in
-                        let pending = viewModel.agentInteractions.isPending(
+                        let pending = viewModel.agentInteractions.isControlDisabled(
                             key: AgentInteractionStore.ownActionKey(agentPubkeyHex: agent, actionId: action.id)
                         )
                         Button {
@@ -514,7 +514,7 @@ private struct AgentSubagentThreadContent: View {
     }
 
     private func taskHeader(_ task: AgentItemProjection) -> some View {
-        let stopPending = viewModel.agentInteractions.isPending(
+        let stopPending = viewModel.agentInteractions.isControlDisabled(
             key: AgentInteractionStore.stopKey(agentPubkeyHex: task.sender, targetEventIdHex: task.messageIdHex)
         )
         return HStack(spacing: 10) {
@@ -571,7 +571,7 @@ private struct AgentSubagentThreadContent: View {
                     isTwoPersonChat: viewModel.isTwoPersonChat,
                     canInteract: viewModel.canSendMessages,
                     pendingRequest: viewModel.agentInteractions.pendingRequest(forItemEventId: projection.messageIdHex),
-                    stopPending: viewModel.agentInteractions.isPending(
+                    stopPending: viewModel.agentInteractions.isControlDisabled(
                         key: AgentInteractionStore.stopKey(
                             agentPubkeyHex: projection.sender,
                             targetEventIdHex: projection.messageIdHex
@@ -609,7 +609,10 @@ private struct AgentSubagentThreadContent: View {
                     onOpenSubagentThread: { childTask in
                         nestedTaskId = childTask.messageIdHex
                     },
-                    onInsertDraftText: onInsertDraftText
+                    onInsertDraftText: onInsertDraftText,
+                    onRecheckPendingStatus: { key in
+                        Task { await viewModel.recheckAgentRequestStatus(forKey: key) }
+                    }
                 )
             } else {
                 // Subagent words (kind 1111 comment) or human reply in thread.

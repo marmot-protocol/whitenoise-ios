@@ -290,7 +290,6 @@ struct AgentItemSupportTests {
         let key = AgentInteractionStore.itemKey(targetEventIdHex: approvalId)
         _ = try await store.submit(
             key: key,
-            targetEventIdHex: approvalId,
             summary: "Allow once",
             senderAccountIdHex: me,
             payload: payload
@@ -603,7 +602,6 @@ struct AgentItemSupportTests {
         do {
             _ = try await store.submit(
                 key: key,
-                targetEventIdHex: nil,
                 summary: "New Session",
                 senderAccountIdHex: me,
                 payload: payload,
@@ -615,28 +613,31 @@ struct AgentItemSupportTests {
             Issue.record("Expected CancellationError to rethrow when status is unknown")
         } catch is CancellationError {}
 
-        // Still pending while status is unknown, and a duplicate tap must not mint a second send.
+        // Still pending while status is unknown, but controls stay enabled for recheck.
         #expect(store.isPending(key: key))
+        #expect(!store.isControlDisabled(key: key))
         #expect(store.pendingRequest(forKey: key)?.statusUnknown == true)
+
+        // If the follow-up status probe throws, keep pending and do not mint a duplicate send.
+        struct ProbeError: Error {}
         _ = try await store.submit(
             key: key,
-            targetEventIdHex: nil,
             summary: "New Session",
             senderAccountIdHex: me,
             payload: payload,
-            checkStatus: { _ in nil }
+            checkStatus: { _ in throw ProbeError() }
         ) { _, _ in
             sendCount += 1
             return LocalSendAcceptanceFfi(clientToken: "t2", messageIdHex: hex("77"))
         }
         #expect(sendCount == 1)
+        #expect(store.pendingRequest(forKey: key)?.statusUnknown == true)
 
         // Once MDK confirms rejection, a fresh submission is allowed.
         probeStatus = .rejected
         let retriedId = hex("88")
         let accepted = try await store.submit(
             key: key,
-            targetEventIdHex: nil,
             summary: "New Session",
             senderAccountIdHex: me,
             payload: payload,
@@ -648,6 +649,160 @@ struct AgentItemSupportTests {
         #expect(sendCount == 2)
         #expect(accepted?.messageIdHex == retriedId)
         #expect(store.pendingRequest(forKey: key)?.statusUnknown == false)
+        #expect(store.isControlDisabled(key: key))
+    }
+
+    @MainActor
+    @Test func agentInteractionStoreRecoversCompletedQueuedAndEngineOwnedStatusesAndSettles() async throws {
+        let store = AgentInteractionStore()
+        let agent = hex("aa")
+        let me = hex("22")
+        let payload = AgentRequestBuilder.newSession(agentPubkeyHex: agent)
+
+        let completedId = hex("c1")
+        let completedKey = AgentInteractionStore.newSessionKey(agentPubkeyHex: agent)
+        let recoveredCompleted = try await store.submit(
+            key: completedKey,
+            summary: "New Session",
+            senderAccountIdHex: me,
+            payload: payload,
+            checkStatus: { _ in
+                .completed(summary: SendSummaryFfi(published: 1, messageIds: [completedId]))
+            }
+        ) { _, _ in
+            throw CancellationError()
+        }
+        #expect(recoveredCompleted?.messageIdHex == completedId)
+        #expect(store.pendingRequest(forKey: completedKey)?.requestEventIdHex == completedId)
+        #expect(store.isControlDisabled(key: completedKey))
+        store.reconcile(settledEventIds: [completedId])
+        #expect(!store.isPending(key: completedKey))
+
+        let queuedId = hex("c2")
+        let queuedKey = AgentInteractionStore.stopKey(agentPubkeyHex: agent, targetEventIdHex: hex("11"))
+        let recoveredQueued = try await store.submit(
+            key: queuedKey,
+            summary: "Stop",
+            senderAccountIdHex: me,
+            payload: payload,
+            checkStatus: { _ in .queued(messageIdHex: queuedId) }
+        ) { _, _ in
+            throw CancellationError()
+        }
+        #expect(recoveredQueued?.messageIdHex == queuedId)
+        #expect(store.pendingRequest(forKey: queuedKey)?.requestEventIdHex == queuedId)
+
+        let engineOwnedId = hex("c3")
+        let engineOwnedKey = AgentInteractionStore.ownActionKey(agentPubkeyHex: agent, actionId: "compact")
+        let recoveredEngineOwned = try await store.submit(
+            key: engineOwnedKey,
+            summary: "Compact",
+            senderAccountIdHex: me,
+            payload: payload,
+            checkStatus: { _ in .engineOwned(messageIdHex: engineOwnedId) }
+        ) { _, _ in
+            throw CancellationError()
+        }
+        #expect(recoveredEngineOwned?.messageIdHex == engineOwnedId)
+        #expect(store.pendingRequest(forKey: engineOwnedKey)?.requestEventIdHex == engineOwnedId)
+    }
+
+    @MainActor
+    @Test func viewModelRechecksAmbiguousAgentRequestUsingOriginalTokenAndRecoversOnRejection() async throws {
+        let appState = AppState.test()
+        let viewModel = ConversationViewModel(appState: appState, group: group(name: "Agent Chat", id: hex("bb")))
+        let agent = hex("aa")
+        let key = AgentInteractionStore.newSessionKey(agentPubkeyHex: agent)
+        var capturedTokens: [String] = []
+        var probedTokens: [String] = []
+        var statusToReturn: LocalSendStatusFfi?
+
+        viewModel.agentCustomEventSendOverride = { _, token in
+            capturedTokens.append(token)
+            if capturedTokens.count == 1 {
+                throw CancellationError()
+            }
+            return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: hex("99"))
+        }
+        viewModel.agentLocalSendStatusOverride = { token in
+            probedTokens.append(token)
+            return statusToReturn
+        }
+
+        await viewModel.sendAgentNewSession(agentPubkeyHex: agent)
+        let firstToken = try #require(capturedTokens.first)
+        #expect(capturedTokens.count == 1)
+        #expect(probedTokens == [firstToken])
+        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.statusUnknown == true)
+        #expect(!viewModel.agentInteractions.isControlDisabled(key: key))
+
+        // Explicit recheck probes the original token and marks failed when MDK confirms rejection.
+        statusToReturn = .rejected
+        await viewModel.recheckAgentRequestStatus(forKey: key)
+        #expect(probedTokens == [firstToken, firstToken])
+        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.sendFailed == true)
+
+        // Retrying through the production viewModel now mints a fresh send and succeeds.
+        await viewModel.sendAgentNewSession(agentPubkeyHex: agent)
+        #expect(capturedTokens.count == 2)
+        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.requestEventIdHex == hex("99"))
+    }
+
+    @MainActor
+    @Test func blockingAnAgentRemovesItsTurnsSessionsAndWaitingSubagentControls() {
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: group(name: "Agent Chat", id: hex("bb")))
+        let agent = hex("aa")
+        let sessionId = hex("31")
+        let turnId = hex("32")
+        let taskId = hex("33")
+        let approvalId = hex("34")
+
+        let sessionRecord = timelineRecord(
+            messageIdHex: sessionId,
+            sender: agent,
+            plaintext: "",
+            kind: MessageSemantics.kindAgentActivity,
+            timelineAt: 1,
+            agentItem: makeAgentItem(itemId: "s1", itemType: "session", state: .running, title: "Session", fieldsJson: #"{"type":"session","body":{}}"#)
+        )
+        let turnRecord = timelineRecord(
+            messageIdHex: turnId,
+            sender: agent,
+            plaintext: "",
+            kind: MessageSemantics.kindAgentActivity,
+            timelineAt: 2,
+            agentItem: makeAgentItem(itemId: "t1", itemType: "turn", state: .running, title: "Working", fieldsJson: #"{"type":"turn","body":{"started_by":"user"}}"#)
+        )
+        let taskRecord = timelineRecord(
+            messageIdHex: taskId,
+            sender: agent,
+            plaintext: "",
+            kind: MessageSemantics.kindAgentActivity,
+            timelineAt: 3,
+            agentItem: makeAgentItem(itemId: "sub1", itemType: "task", state: .running, title: "Explore", fieldsJson: #"{"type":"task","body":{"kind":"subagent","description":"Explore"}}"#)
+        )
+        let approvalRecord = timelineRecord(
+            messageIdHex: approvalId,
+            sender: agent,
+            plaintext: "git status",
+            kind: MessageSemantics.kindAgentActivity,
+            tags: [MessageTagFfi(values: ["subagent", "sub1"])],
+            timelineAt: 4,
+            agentItem: makeAgentItem(itemId: "a1", itemType: "approval", state: .waiting, title: "Allow?", fieldsJson: #"{"type":"approval","body":{"choices":[{"id":"c0","label":"Allow","effect":"allow"}]}}"#)
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [sessionRecord, turnRecord, taskRecord, approvalRecord], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        #expect(viewModel.activeRunningAgentTurns.map(\.messageIdHex) == [turnId])
+        #expect(viewModel.latestAgentSessions.map(\.messageIdHex) == [sessionId])
+        #expect(viewModel.waitingAgentSubagents.map(\.task.messageIdHex) == [taskId])
+
+        viewModel.applyBlockedAuthors([agent])
+        #expect(viewModel.activeRunningAgentTurns.isEmpty)
+        #expect(viewModel.latestAgentSessions.isEmpty)
+        #expect(viewModel.waitingAgentSubagents.isEmpty)
     }
 
     // MARK: - Helpers

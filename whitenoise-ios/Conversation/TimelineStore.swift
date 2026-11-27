@@ -718,6 +718,7 @@ final class TimelineStore {
         let normalized = Set(accountIdHexes.map { $0.lowercased() })
         guard blockedAuthorIds != normalized else { return false }
         blockedAuthorIds = normalized
+        rebuildAgentProjections()
         let changed = rebuildTimeline()
         replyPreviewDisplayCache.removeAll()
         noteProjectionChanged()
@@ -921,6 +922,7 @@ final class TimelineStore {
         for id in order {
             guard let projection = agentItemProjectionByMessageId[id],
                   case .turn = projection.body,
+                  !isBlockedAuthor(projection.sender),
                   !subagentThreadIndex.hiddenFromMainTimeline.contains(id)
             else { continue }
             if latestByAgent[projection.sender] == nil {
@@ -944,9 +946,10 @@ final class TimelineStore {
         for id in order {
             guard let task = agentItemProjectionByMessageId[id],
                   task.isSubagentTask,
+                  !isBlockedAuthor(task.sender),
                   !subagentThreadIndex.hiddenFromMainTimeline.contains(id),
                   let summary = subagentThreadIndex.summariesByTaskMessageId[id],
-                  let waiting = summary.waitingInteractions.last
+                  let waiting = summary.waitingInteractions.last(where: { !isBlockedAuthor($0.sender) })
             else { continue }
             results.append((task: task, waiting: waiting))
         }
@@ -961,7 +964,8 @@ final class TimelineStore {
         var agentOrder: [String] = []
         for id in order {
             guard let projection = agentItemProjectionByMessageId[id],
-                  case .session = projection.body
+                  case .session = projection.body,
+                  !isBlockedAuthor(projection.sender)
             else { continue }
             if latestByAgent[projection.sender] == nil {
                 agentOrder.append(projection.sender)
@@ -1388,6 +1392,11 @@ final class TimelineStore {
 
     @discardableResult
     private func rebuildAgentProjections() -> Bool {
+        if agentItemProjectionByMessageId.isEmpty
+            && subagentThreadIndex == .empty
+            && settledAgentEventIds.isEmpty {
+            return false
+        }
         let orderedIds: [String]
         if let preparedOrder {
             orderedIds = preparedOrder
@@ -1405,7 +1414,8 @@ final class TimelineStore {
             orderedMessageIds: orderedIds,
             agentItemsByMessageId: agentItemProjectionByMessageId,
             threadRefByMessageId: threadRefByMessageId,
-            senderByMessageId: senderById
+            senderByMessageId: senderById,
+            blockedSenders: blockedAuthorIds
         )
         var nextSettled: Set<String> = []
         for projection in agentItemProjectionByMessageId.values {
@@ -1522,14 +1532,7 @@ final class TimelineStore {
         case .chat, .reply, .media:
             return row(editProjections.displayRecord(for: record))
         case .agentActivity:
-            let item = row(record)
-            // Structured agent item (kind 1201 with `agent_item`) always renders.
-            if agentItemProjectionByMessageId[record.messageIdHex] != nil {
-                return item
-            }
-            // Legacy JSON activity OR plain-text fallback (e.g. older Hermes plugin):
-            // kind-1201 rows with no `agent_item` must still show as a simple row, never disappear.
-            return item
+            return row(record)
         case .agentOperation:
             let item = row(record)
             guard agentEventProjections.display(for: item) != nil else { return nil }

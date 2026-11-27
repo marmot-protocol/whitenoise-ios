@@ -2492,11 +2492,10 @@ final class ConversationViewModel {
         agentInteractions.reconcile(settledEventIds: timelineStore.settledAgentEventIds)
         let missing = agentInteractions.unknownSettledEventIds(in: timelineStore.allAgentItemProjections())
         guard !missing.isEmpty else { return }
-        agentInteractions.markSettledIdsQueried(missing)
-        loadKind1202RequestSenders()
+        loadKind1202RequestSenders(for: missing)
     }
 
-    private func loadKind1202RequestSenders() {
+    private func loadKind1202RequestSenders(for queriedIds: Set<String>) {
         guard let appState, let accountRef = appState.activeAccountRef,
               let client = appState.client else { return }
         let groupIdHex = group.groupIdHex
@@ -2509,6 +2508,7 @@ final class ConversationViewModel {
                 kinds: [MessageSemantics.kindAgentOperation]
             ), !Task.isCancelled else { return }
             self?.agentInteractions.recordRequestSenders(records)
+            self?.agentInteractions.markSettledIdsQueried(queriedIds)
         }
     }
 
@@ -2617,21 +2617,58 @@ final class ConversationViewModel {
         )
     }
 
+    @ObservationIgnored var agentCustomEventSendOverride: AgentInteractionStore.SendCustomEventOperation?
+    @ObservationIgnored var agentLocalSendStatusOverride: AgentInteractionStore.LocalSendStatusOperation?
+
+    func recheckAgentRequestStatus(forKey key: String) async {
+        if let override = agentLocalSendStatusOverride {
+            _ = await agentInteractions.recheckStatus(forKey: key, checkStatus: override)
+            return
+        }
+        guard let appState,
+              let accountRef = appState.activeAccountRef,
+              let client = try? appState.currentMarmotClient() else { return }
+        let groupIdHex = group.groupIdHex
+        _ = await agentInteractions.recheckStatus(forKey: key) { token in
+            try await client.localSendStatus(
+                accountRef: accountRef,
+                groupIdHex: groupIdHex,
+                clientToken: token
+            )
+        }
+    }
+
     private func sendAgentRequest(
         key: String,
         targetEventIdHex: String?,
         summary: String,
         payload: AgentRequestPayload
     ) async {
-        guard let appState,
-              let accountRef = appState.activeAccountRef,
-              let senderId = myAccountId else { return }
+        _ = targetEventIdHex
+        guard let appState else { return }
+        let senderId = myAccountId ?? ""
+        if let sendOverride = agentCustomEventSendOverride {
+            do {
+                _ = try await agentInteractions.submit(
+                    key: key,
+                    summary: summary,
+                    senderAccountIdHex: senderId,
+                    payload: payload,
+                    checkStatus: agentLocalSendStatusOverride,
+                    send: sendOverride
+                )
+            } catch {
+                appState.present(UserFacingError.toast(title: L10n.string("Couldn't send action"), error: error))
+            }
+            return
+        }
+        guard let accountRef = appState.activeAccountRef,
+              !senderId.isEmpty else { return }
         let groupIdHex = group.groupIdHex
         do {
             let client = try appState.currentMarmotClient()
             _ = try await agentInteractions.submit(
                 key: key,
-                targetEventIdHex: targetEventIdHex,
                 summary: summary,
                 senderAccountIdHex: senderId,
                 payload: payload,

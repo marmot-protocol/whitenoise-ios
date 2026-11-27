@@ -15,7 +15,6 @@ final class AgentInteractionStore {
     struct PendingRequest: Equatable, Sendable {
         let key: String
         let clientToken: String
-        let targetEventIdHex: String?
         let summary: String
         let senderAccountIdHex: String
         var requestEventIdHex: String?
@@ -74,6 +73,13 @@ final class AgentInteractionStore {
         return !pending.sendFailed
     }
 
+    /// Repeatable controls stay tappable while `statusUnknown` is true so the
+    /// user can trigger a status recheck (and retry if MDK rejected the send).
+    func isControlDisabled(key: String) -> Bool {
+        guard let pending = pendingByKey[key] else { return false }
+        return !pending.sendFailed && !pending.statusUnknown
+    }
+
     /// Returns the account ID hex of the person who answered/triggered the item
     /// if any event id in `item.settles` has a known sender.
     func settledByAccountId(for projection: AgentItemProjection) -> String? {
@@ -87,15 +93,12 @@ final class AgentInteractionStore {
 
     /// Records senders learned from durable kind-1202 records in MDK storage.
     func recordRequestSenders(_ records: [AppMessageRecordFfi]) {
-        var updated = false
         for record in records where record.kind == MessageSemantics.kindAgentOperation {
             guard !record.messageIdHex.isEmpty, !record.sender.isEmpty else { continue }
             if requestSenderByEventId[record.messageIdHex] != record.sender {
                 requestSenderByEventId[record.messageIdHex] = record.sender
-                updated = true
             }
         }
-        _ = updated
     }
 
     /// Returns settled event IDs whose sender is unknown and has not yet been queried.
@@ -136,7 +139,6 @@ final class AgentInteractionStore {
     @discardableResult
     func submit(
         key: String,
-        targetEventIdHex: String?,
         summary: String,
         senderAccountIdHex: String,
         payload: AgentRequestPayload,
@@ -149,7 +151,7 @@ final class AgentInteractionStore {
                     LocalSendAcceptanceFfi(clientToken: existing.clientToken, messageIdHex: $0)
                 }
             }
-            if let resolved = await probeExistingPending(existing, checkStatus: checkStatus) {
+            if let resolved = await recheckStatus(forKey: key, checkStatus: checkStatus) {
                 return resolved
             }
             if pendingByKey[key]?.sendFailed != true {
@@ -161,7 +163,6 @@ final class AgentInteractionStore {
         let pending = PendingRequest(
             key: key,
             clientToken: token,
-            targetEventIdHex: targetEventIdHex,
             summary: summary,
             senderAccountIdHex: senderAccountIdHex,
             requestEventIdHex: nil,
@@ -179,16 +180,55 @@ final class AgentInteractionStore {
             )
             return acceptance
         } catch {
-            if let recovered = await recoverAfterError(
-                key: key,
-                token: token,
-                senderAccountIdHex: senderAccountIdHex,
-                error: error,
-                checkStatus: checkStatus
-            ) {
-                return recovered
+            if let checkStatus {
+                do {
+                    let status = try await checkStatus(token)
+                    if let recovered = applySendStatus(
+                        key: key,
+                        token: token,
+                        senderAccountIdHex: senderAccountIdHex,
+                        status: status,
+                        ambiguousWhenMissing: MediaSubmissionRecovery.isAmbiguousWithoutStatus(error)
+                    ) {
+                        return recovered
+                    }
+                } catch {
+                    if pendingByKey[key]?.clientToken == token {
+                        pendingByKey[key]?.sendFailed = false
+                        pendingByKey[key]?.statusUnknown = true
+                    }
+                }
+            } else if pendingByKey[key]?.clientToken == token {
+                let ambiguous = MediaSubmissionRecovery.isAmbiguousWithoutStatus(error)
+                pendingByKey[key]?.sendFailed = !ambiguous
+                pendingByKey[key]?.statusUnknown = ambiguous
             }
             throw error
+        }
+    }
+
+    /// Explicit follow-up status check for a request whose admission was left unknown.
+    /// Returns a `LocalSendAcceptanceFfi` if MDK confirms admission; marks `sendFailed = true`
+    /// when MDK reports rejection or still has no record of the token.
+    @discardableResult
+    func recheckStatus(
+        forKey key: String,
+        checkStatus: LocalSendStatusOperation
+    ) async -> LocalSendAcceptanceFfi? {
+        guard let existing = pendingByKey[key], !existing.sendFailed, existing.statusUnknown else {
+            return nil
+        }
+        do {
+            let status = try await checkStatus(existing.clientToken)
+            return applySendStatus(
+                key: existing.key,
+                token: existing.clientToken,
+                senderAccountIdHex: existing.senderAccountIdHex,
+                status: status,
+                ambiguousWhenMissing: false
+            )
+        } catch {
+            return nil
         }
     }
 
@@ -211,101 +251,41 @@ final class AgentInteractionStore {
         }
     }
 
-    /// Probes MDK for an existing ambiguous pending request. Returns a
-    /// `LocalSendAcceptanceFfi` if admission is confirmed; marks `sendFailed = true`
-    /// only when MDK definitively reports rejection.
-    private func probeExistingPending(
-        _ existing: PendingRequest,
-        checkStatus: LocalSendStatusOperation
-    ) async -> LocalSendAcceptanceFfi? {
-        do {
-            let status = try await checkStatus(existing.clientToken)
-            guard pendingByKey[existing.key]?.clientToken == existing.clientToken else { return nil }
-            switch status {
-            case .queued(let messageIdHex), .engineOwned(let messageIdHex):
-                recordAccepted(
-                    key: existing.key,
-                    token: existing.clientToken,
-                    messageIdHex: messageIdHex,
-                    senderAccountIdHex: existing.senderAccountIdHex
-                )
-                return LocalSendAcceptanceFfi(clientToken: existing.clientToken, messageIdHex: messageIdHex)
-            case .completed:
-                pendingByKey[existing.key]?.sendFailed = false
-                pendingByKey[existing.key]?.statusUnknown = false
-                return nil
-            case .rejected, .refusedNewMembers:
-                pendingByKey[existing.key]?.sendFailed = true
-                pendingByKey[existing.key]?.statusUnknown = false
-                return nil
-            case nil:
-                return nil
-            }
-        } catch {
-            return nil
-        }
-    }
-
-    /// Resolves a thrown submission error using `checkStatus` and
-    /// `MediaSubmissionRecovery.isAmbiguousWithoutStatus`. Returns an acceptance
-    /// if MDK confirms the send was admitted; otherwise updates `pendingByKey`
-    /// so only definitively rejected sends clear `isPending(key:)`.
-    private func recoverAfterError(
+    private func applySendStatus(
         key: String,
         token: String,
         senderAccountIdHex: String,
-        error: Error,
-        checkStatus: LocalSendStatusOperation?
-    ) async -> LocalSendAcceptanceFfi? {
-        if let checkStatus {
-            do {
-                let status = try await checkStatus(token)
-                guard pendingByKey[key]?.clientToken == token else { return nil }
-                switch status {
-                case .queued(let messageIdHex), .engineOwned(let messageIdHex):
-                    recordAccepted(
-                        key: key,
-                        token: token,
-                        messageIdHex: messageIdHex,
-                        senderAccountIdHex: senderAccountIdHex
-                    )
-                    return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: messageIdHex)
-                case .completed:
-                    pendingByKey[key]?.sendFailed = false
-                    pendingByKey[key]?.statusUnknown = false
-                    return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: "")
-                case .rejected, .refusedNewMembers:
-                    pendingByKey[key]?.sendFailed = true
-                    pendingByKey[key]?.statusUnknown = false
-                    return nil
-                case nil:
-                    if MediaSubmissionRecovery.isAmbiguousWithoutStatus(error) {
-                        pendingByKey[key]?.sendFailed = false
-                        pendingByKey[key]?.statusUnknown = true
-                    } else {
-                        pendingByKey[key]?.sendFailed = true
-                        pendingByKey[key]?.statusUnknown = false
-                    }
-                    return nil
-                }
-            } catch {
-                // Failed status read is not evidence of rejection: keep pending.
-                if pendingByKey[key]?.clientToken == token {
-                    pendingByKey[key]?.sendFailed = false
-                    pendingByKey[key]?.statusUnknown = true
-                }
-                return nil
-            }
-        }
+        status: LocalSendStatusFfi?,
+        ambiguousWhenMissing: Bool
+    ) -> LocalSendAcceptanceFfi? {
         guard pendingByKey[key]?.clientToken == token else { return nil }
-        if MediaSubmissionRecovery.isAmbiguousWithoutStatus(error) {
-            pendingByKey[key]?.sendFailed = false
-            pendingByKey[key]?.statusUnknown = true
-        } else {
+        switch status {
+        case .queued(let messageIdHex), .engineOwned(let messageIdHex):
+            recordAccepted(
+                key: key,
+                token: token,
+                messageIdHex: messageIdHex,
+                senderAccountIdHex: senderAccountIdHex
+            )
+            return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: messageIdHex)
+        case .completed(let summary):
+            let messageIdHex = summary.messageIds.first ?? ""
+            recordAccepted(
+                key: key,
+                token: token,
+                messageIdHex: messageIdHex,
+                senderAccountIdHex: senderAccountIdHex
+            )
+            return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: messageIdHex)
+        case .rejected, .refusedNewMembers:
             pendingByKey[key]?.sendFailed = true
             pendingByKey[key]?.statusUnknown = false
+            return nil
+        case nil:
+            pendingByKey[key]?.sendFailed = !ambiguousWhenMissing
+            pendingByKey[key]?.statusUnknown = ambiguousWhenMissing
+            return nil
         }
-        return nil
     }
 
     func clearFailed(key: String) {
