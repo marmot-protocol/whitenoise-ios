@@ -8,6 +8,7 @@ struct AccountSetupView: View {
     let onClose: () -> Void
     let onOpenChats: () -> Void
     @State private var decision: SetupDecision?
+    @State private var autoOpenedProfileAttempt: ObjectIdentifier?
 
     var body: some View {
         List {
@@ -70,6 +71,11 @@ struct AccountSetupView: View {
         .onDisappear { model.suspend() }
         // Whichever sheet is open, a stalled run continues from Check Again here, not from that sheet.
         .onChange(of: needsCheckAgain) { if needsCheckAgain { decision = nil } }
+        .onChange(of: shouldAutoOpenProfile, initial: true) {
+            guard shouldAutoOpenProfile else { return }
+            autoOpenedProfileAttempt = ObjectIdentifier(model)
+            decision = SetupDecision(step: .profile)
+        }
         .sheet(item: $decision) { decision in
             AccountSetupActions(model: model, selectedStep: decision.step) {
                 self.decision = nil
@@ -82,6 +88,14 @@ struct AccountSetupView: View {
     private var reviewStep: OnboardingStepFfi? {
         guard !model.cancelled else { return nil }
         return AccountSetupPresentation.stepToReview(model.snapshot, isBusy: model.isBusy, isConnected: model.isConnected)
+    }
+
+    private var shouldAutoOpenProfile: Bool {
+        guard !model.cancelled, decision == nil, autoOpenedProfileAttempt != ObjectIdentifier(model),
+              !appState.isFinishingAccountSetup, appState.canUseRuntimeForLocalForegroundWork else { return false }
+        return AccountSetupPresentation.opensProfileAutomatically(
+            model.snapshot, isBusy: model.isBusy, isConnected: model.isConnected
+        )
     }
 
     private var needsCheckAgain: Bool {

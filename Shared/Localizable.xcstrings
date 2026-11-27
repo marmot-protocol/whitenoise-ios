@@ -19642,73 +19642,73 @@
         }
       }
     },
-    "Add your profile" : {
+    "Add your name" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Füge dein Profil hinzu"
+            "value" : "Füge deinen Namen hinzu"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add your profile"
+            "value" : "Add your name"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Añade tu perfil"
+            "value" : "Añade tu nombre"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lisää profiilisi"
+            "value" : "Lisää nimesi"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajoutez votre profil"
+            "value" : "Ajoutez votre nom"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aggiungi il tuo profilo"
+            "value" : "Aggiungi il tuo nome"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adicione seu perfil"
+            "value" : "Adicione seu nome"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Добавьте профиль"
+            "value" : "Добавьте имя"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Profilinizi ekleyin"
+            "value" : "Adınızı ekleyin"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "添加你的个人资料"
+            "value" : "添加你的名字"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "新增你的個人資料"
+            "value" : "新增你的名字"
           }
         }
       }

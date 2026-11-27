@@ -172,7 +172,7 @@ struct AccountSetupProfileStatus<PrivacyContent: View>: View {
         }
         if presentation.isInterrupted { return "Your profile update didn’t finish" }
         if presentation.profile != nil { return "Review your profile" }
-        return presentation.canEdit ? "Add your profile" : "Couldn’t load your profile"
+        return presentation.canEdit ? "Add your name" : "Couldn’t load your profile"
     }
 
     @ViewBuilder private var message: some View {
