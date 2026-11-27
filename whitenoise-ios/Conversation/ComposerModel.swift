@@ -37,6 +37,26 @@ enum MediaSubmissionRecovery {
     }
 }
 
+/// What Try Again re-sends for a failed optimistic row: its text, or its
+/// staged attachments with the caption. Nil once nothing can be re-sent,
+/// which leaves the row discard-only.
+nonisolated enum FailedSendRetry {
+    case text(String)
+    case media([MediaDraftAttachment], caption: String)
+
+    static func payload(record: AppMessageRecordFfi, staged: [MessageMediaAttachment]?) -> FailedSendRetry? {
+        if let staged, !staged.isEmpty {
+            let attachments = staged.compactMap(MediaDraftAttachment.init(retrying:))
+            guard attachments.count == staged.count else { return nil }
+            return .media(attachments, caption: record.plaintext)
+        }
+        guard !record.plaintext.isEmpty,
+              record.tags.allSatisfy({ $0.values.first != "_media_pending" })
+        else { return nil }
+        return .text(record.plaintext)
+    }
+}
+
 /// One outgoing message already parked in the timeline, waiting for its draft
 /// revision and its trip to MDK. Everything the send publishes is captured at
 /// the Send tap, so a composer edit afterwards belongs to the next message.
@@ -179,16 +199,17 @@ final class ComposerModel {
         }
     }
 
-    /// Re-sends a failed text message from its retained optimistic record.
-    /// Reuses the local display identity while creating a new send attempt.
-    /// Media sends are only discarded here. Returns false when the row isn't a
-    /// retryable failed text send.
+    /// Re-sends a failed message from its retained optimistic record, and a
+    /// media send from the staged bytes its row still holds. Reuses the local
+    /// display identity while creating a new send attempt. Returns false when
+    /// the row isn't a retryable failed send.
     @discardableResult
-    func retryFailedTextSend(rowId: String) async -> Bool {
+    func retryFailedTransientSend(rowId: String) async -> Bool {
         guard let record = timelineStore.failedTransientRecord(rowId: rowId),
-              !timelineStore.failedTransientRowHasStagedMedia(rowId: rowId),
-              record.tags.allSatisfy({ $0.values.first != "_media_pending" }),
-              !record.plaintext.isEmpty
+              let retry = FailedSendRetry.payload(
+                  record: record,
+                  staged: timelineStore.mediaProjections.pending(forRowId: rowId)
+              )
         else { return false }
         // Keep the failed row when the device is offline — a retry would fail
         // straight back into the same state and read as the button doing
@@ -214,12 +235,29 @@ final class ComposerModel {
         // row itself: the awaits above are wide enough for a second retry or
         // a Delete to have consumed it already.
         guard timelineStore.failedTransientRecord(rowId: rowId) != nil else { return false }
-        guard canSendMessages() else {
-            onError(L10n.string("Send failed"))
-            return false
-        }
         let replyTargetId = ConversationViewModel.replyTargetMessageId(in: record)
-        await send(record.plaintext, replyTargetId: replyTargetId, retryTempId: String(rowId.dropFirst("msg:".count)))
+        let retryTempId = String(rowId.dropFirst("msg:".count))
+        switch retry {
+        case .text(let text):
+            guard canSendMessages() else {
+                onError(L10n.string("Send failed"))
+                return false
+            }
+            await send(text, replyTargetId: replyTargetId, retryTempId: retryTempId)
+        case .media(let attachments, let caption):
+            guard canSendMediaAttachments(),
+                  let staged = stage(
+                      text: caption,
+                      attachments: attachments,
+                      replyTargetId: replyTargetId,
+                      retryTempId: retryTempId
+                  )
+            else {
+                onError(L10n.string("Send failed"))
+                return false
+            }
+            await submit(staged)
+        }
         return true
     }
 

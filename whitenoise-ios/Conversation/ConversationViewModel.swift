@@ -1538,14 +1538,15 @@ final class ConversationViewModel {
     }
 
     /// Committed-but-undelivered rows retry via group convergence (any
-    /// content). A failed transient row (nothing committed) retries only when
-    /// it's a text send — media bytes aren't retained for re-upload.
+    /// content). A failed transient row (nothing committed) retries its text,
+    /// or its media while the row still holds the staged bytes.
     func canRetryFailedSend(rowId: String) -> Bool {
         if timelineStore.undeliveredDurableMessageId(rowId: rowId) != nil { return true }
         guard let record = timelineStore.failedTransientRecord(rowId: rowId) else { return false }
-        return !record.plaintext.isEmpty
-            && !timelineStore.failedTransientRowHasStagedMedia(rowId: rowId)
-            && record.tags.allSatisfy { $0.values.first != "_media_pending" }
+        return FailedSendRetry.payload(
+            record: record,
+            staged: timelineStore.mediaProjections.pending(forRowId: rowId)
+        ) != nil
     }
 
     /// Failed transient rows are dropped outright; a committed undelivered
@@ -1651,7 +1652,7 @@ final class ConversationViewModel {
             }
             return
         }
-        await composer.retryFailedTextSend(rowId: rowId)
+        await composer.retryFailedTransientSend(rowId: rowId)
     }
 
     func discardFailedSend(rowId: String) {
