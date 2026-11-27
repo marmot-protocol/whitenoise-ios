@@ -188,8 +188,9 @@ area until the user dismisses it through `acknowledgeGroupCommitUndelivered`.
 While the group's own commit is pending, changes, leaves and declines fail with
 `GroupCommitPending`; no acknowledgement releases it, so word it and let the user
 retry later. A change MDK gives up after its call returned arrives as
-`GroupChangeNotDelivered`: toast it like `QueuedIntentRefused`, then acknowledge
-it (`acknowledgeChangeNotDelivered`). MDK keeps each record until acknowledged but
+`GroupChangeNotDelivered`: toast it like `QueuedIntentRefused` through
+`ToastState.enqueue`, so back-to-back notices show in turn, and acknowledge it
+(`acknowledgeChangeNotDelivered`) only once its toast has been shown. MDK keeps each record until acknowledged but
 the event only notifies, so once per launch the app also reads
 `groupChangesNotDelivered` for every chat and raises the newest one the same way.
 `NoUsableRelay` offers no retry.
