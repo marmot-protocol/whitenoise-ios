@@ -18,7 +18,7 @@ Version 2026.9.9 build 33 and the existing configuration values are unchanged.
 | Voice messages; video audio; hold-to-dictate | `NSMicrophoneUsageDescription` | Audio capture requests microphone access. Dictation transcribes on device with `SpeechAnalyzer` (iOS 26+) and keeps no audio. |
 | Share a location | `NSLocationWhenInUseUsageDescription` | The location picker requests foreground access. No always/background location mode. |
 | Biometric app unlock | `NSFaceIDUsageDescription` | Local Authentication unlocks the app. |
-| Save shared media to Photos | `NSPhotoLibraryAddUsageDescription` | The system share sheet can save selected photos/videos. Add-only wording; no general library-read request. |
+| Save media to Photos | `NSPhotoLibraryAddUsageDescription` | Save in the fullscreen media viewer adds the photo or video to the library (`PHPhotoLibrary` add-only authorization), and the system share sheet can save selected photos/videos. Add-only wording; no general library-read request. |
 
 All five purpose strings have English and all nine supported translations in
 `whitenoise-ios/InfoPlist.xcstrings`. Camera and microphone copy includes video.
