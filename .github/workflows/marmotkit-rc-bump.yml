@@ -1,0 +1,124 @@
+name: MarmotKit RC bump
+
+# Once a day, after MDK's RC lane publishes, pin develop to the latest verified
+# MarmotKit Release Candidate (mdk `rc-meta:rc/latest.json`) and open or refresh
+# one pull request into develop. Never touches master: production pins Stable
+# only (scripts/ci/check-marmotkit-channel.sh). See docs/release-flow.md.
+#
+# GitHub runs scheduled workflows from the default branch's copy of this file,
+# so it must be on the default branch (ideally `develop`) to run daily; it can
+# always be started by hand (workflow_dispatch).
+#
+# A PR opened with the default GITHUB_TOKEN does not start other workflows, so
+# Lint and Tests would not run on it. Set the repository secret
+# MARMOTKIT_BUMP_TOKEN (a fine-grained token with contents and pull-requests
+# write on this repository) so the bump PR gets CI like any other.
+
+on:
+  schedule:
+    - cron: "40 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marmotkit-rc-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Pin the latest MarmotKit RC
+    # sync-bindings.sh needs SwiftPM, plutil and BSD sed.
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      BASE: develop
+      BRANCH: automation/marmotkit-rc
+      GH_TOKEN: ${{ secrets.MARMOTKIT_BUMP_TOKEN || github.token }}
+
+    steps:
+      - name: Check out develop
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: develop
+          # History, to tell the bot's commits on the bump branch from people's.
+          fetch-depth: 0
+          token: ${{ secrets.MARMOTKIT_BUMP_TOKEN || github.token }}
+
+      - name: Pin the latest verified RC
+        id: sync
+        run: scripts/sync-rc.sh --summary "$RUNNER_TEMP/rc-summary.md"
+
+      - name: Check the pin
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          python3 scripts/check-marmotkit-bindings.py
+          scripts/ci/check-marmotkit-channel.sh "$BASE"
+
+      - name: Open or refresh the bump PR
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.sync.outputs.version }}
+          IMPACT: ${{ steps.sync.outputs.impact }}
+          BREAKING: ${{ steps.sync.outputs.breaking }}
+        run: |
+          set -euo pipefail
+
+          # Someone is fixing call sites on the open bump branch: never replace
+          # their commits. Every bump commit carries the MarmotKit-RC-Bump trailer
+          # (its author is whoever owns the token, so the author can't tell).
+          # Say a newer RC is out and leave the branch alone.
+          inspected=""
+          if git fetch --quiet origin "$BRANCH" 2>/dev/null; then
+            inspected="$(git rev-parse "origin/$BRANCH")"
+            others="$(git log --format='%(trailers:key=MarmotKit-RC-Bump,valueonly,separator=)|%h' "origin/$BRANCH" --not "origin/$BASE" | grep '^|' || true)"
+            if [[ -n "$others" ]]; then
+              existing="$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json number --jq '.[0].number // empty')"
+              if [[ -n "$existing" ]]; then
+                gh pr comment "$existing" --body "MarmotKit $VERSION ($IMPACT) is out. This branch has hand-made commits, so it was not replaced: run \`just sync-rc\` on it to move to $VERSION, or merge it and the next bump picks $VERSION up."
+              fi
+              echo "$BRANCH has commits by people; not replacing it."
+              exit 0
+            fi
+          fi
+
+          # Every branch requires signed commits, and a git commit made here is
+          # unsigned: commit through the API, which GitHub signs, on a branch of
+          # this run's own. Then move the bump branch onto that commit with a lease
+          # on the head inspected above (none: it must still not exist), so a
+          # person's push in between is never overwritten.
+          paths=()
+          while IFS= read -r path; do paths+=("$path"); done \
+            < <(git status --porcelain --untracked-files=all -- Packages/MarmotKit | cut -c4-)
+          printf 'Moves develop to the RC mdk verified on rc-meta (see the pull request).\n\nMarmotKit-RC-Bump: true\n' > "$RUNNER_TEMP/commit-body.txt"
+          build="$BRANCH-build-$GITHUB_RUN_ID"
+          cleanup_build() {
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$build" >/dev/null 2>&1 || true
+          }
+          trap cleanup_build EXIT
+          commit="$(scripts/ci/signed-commit.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch "$build" \
+            --base "$(git rev-parse "origin/$BASE")" \
+            --message "Pin MarmotKit $VERSION (staging RC, $IMPACT)" \
+            --body-file "$RUNNER_TEMP/commit-body.txt" \
+            "${paths[@]}")"
+          git fetch --quiet origin "$build"
+          git push --force-with-lease="refs/heads/$BRANCH:$inspected" origin "$commit:refs/heads/$BRANCH"
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$build"
+          trap - EXIT
+
+          title="Pin MarmotKit $VERSION (staging RC)"
+          if [[ "$IMPACT" == "minor" || "$BREAKING" != "0" ]]; then
+            title="$title: $IMPACT, $BREAKING breaking UniFFI changes"
+          fi
+          existing="$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json number --jq '.[0].number // empty')"
+          if [[ -n "$existing" ]]; then
+            gh pr edit "$existing" --title "$title" --body-file "$RUNNER_TEMP/rc-summary.md"
+          else
+            gh pr create --base "$BASE" --head "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/rc-summary.md"
+          fi

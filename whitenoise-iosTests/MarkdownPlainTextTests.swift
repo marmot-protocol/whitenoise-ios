@@ -253,7 +253,9 @@ struct MarkdownPlainTextTests {
             deleted: false,
             deletionSource: .unknown,
             invalidationStatus: nil,
-            thread: nil
+            thread: nil,
+            retentionSeconds: nil,
+            retentionExpiresAt: nil
         )
         #expect(MessagePreview.body(preview) == "code reply")
     }

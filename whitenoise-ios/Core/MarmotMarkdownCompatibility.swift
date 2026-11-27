@@ -844,6 +844,8 @@ extension TimelineReplyPreviewFfi {
         media: [MediaAttachmentReferenceFfi] = [],
         replyToMessageIdHex: String? = nil,
         thread: TimelineThreadRefFfi? = nil,
+        retentionSeconds: UInt64? = nil,
+        retentionExpiresAt: UInt64? = nil,
         deleted: Bool,
         deletionSource: DeletionSourceFfi = .unknown
     ) {
@@ -860,7 +862,9 @@ extension TimelineReplyPreviewFfi {
             deleted: deleted,
             deletionSource: deletionSource,
             invalidationStatus: nil,
-            thread: thread
+            thread: thread,
+            retentionSeconds: retentionSeconds,
+            retentionExpiresAt: retentionExpiresAt
         )
     }
 }

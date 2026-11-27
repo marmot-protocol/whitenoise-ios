@@ -10,10 +10,23 @@ import tempfile
 VERSION_FIELDS = {
     "mdk-sha": "mdkSHA",
     "mdk-tag": "mdkTag",
+    "channel": "channel",
     "published-at": "builtAt",
     "uniffi-version": "uniffiVersion",
     "features": "features",
 }
+
+
+def expected_channel_for_tag(tag):
+    if tag.startswith("marmotkit-snapshot-"):
+        return "snapshot"
+    if re.fullmatch(r"marmotkit-v[0-9]+\.[0-9]+\.[0-9]+", tag):
+        return "stable"
+    if re.fullmatch(r"marmotkit-v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+", tag):
+        return "rc"
+    if re.fullmatch(r"marmotkit-v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9A-Za-z.+-]+", tag):
+        return "nightly"
+    return "snapshot"
 
 
 def check_coherence(provenance, package, compiled_version):
@@ -36,6 +49,11 @@ def check_coherence(provenance, package, compiled_version):
         release = tag.removeprefix("marmotkit-v")
     else:
         raise ValueError("expected a published MarmotKit snapshot or release tag")
+    expected_channel = expected_channel_for_tag(tag)
+    if provenance["channel"] != expected_channel:
+        raise ValueError(
+            f"stamped channel '{provenance['channel']}' disagrees with tag '{tag}' (expected '{expected_channel}')"
+        )
     expected_url = ("https://github.com/marmot-protocol/mdk/releases/download/"
                     f"{tag}/MarmotKitFFI-{release}.xcframework.zip")
     targets = [target for target in package.get("targets", []) if target.get("name") == "MarmotKitFFI"]

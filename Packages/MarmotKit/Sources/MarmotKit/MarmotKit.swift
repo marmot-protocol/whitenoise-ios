@@ -3688,10 +3688,10 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func accountRecoveryStatus(accountRef: String) async throws  -> AccountRecoveryStatusFfi
 
     /**
-     * The account's relay health from its held lists and the relay policy:
-     * one row per relay its inbox and NIP-65 lists name, and warnings about
-     * invitations sent through its published inbox list. Local read; never
-     * dials. Re-read on `RelayHealthChanged`.
+     * The account's relay health from its held lists, the relay policy and
+     * this process's inbox checks: one row per relay its inbox and NIP-65
+     * lists name, and warnings about invitations sent through its published
+     * inbox list. Local read; never dials. Re-read on `RelayHealthChanged`.
      */
     func accountRelayHealth(accountRef: String) async throws  -> AccountRelayHealthFfi
 
@@ -4062,6 +4062,21 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * showing the device list; it is not evented.
      */
     func chatsClosedToLinkedDevices(accountRef: String) async throws  -> UInt32
+
+    /**
+     * Check whether the account's inbox relays serve its inbox, and return
+     * the account's relay health after it. The account's worker runs it: one
+     * bounded read per allowed inbox relay (at most 16, 15 seconds each) on
+     * a connection of its own, answered with the signer the worker holds; a
+     * remote or host signer may be asked to sign a relay's authentication
+     * challenge. A relay the policy refuses is never dialed. Refused at once
+     * with `RelayCheckRunning` while a check of the account runs; without a
+     * running account worker it fails as the account not being active and
+     * dials nothing. A check no relay answered changes nothing. The returned
+     * health is the answer; `RelayHealthChanged` follows a changed answer
+     * from the worker.
+     */
+    func checkAccountRelays(accountRef: String) async throws  -> AccountRelayHealthFfi
 
     /**
      * Check the account's KeyPackage slots for new sign-ins now and return
@@ -6885,10 +6900,10 @@ open func accountRecoveryStatus(accountRef: String)async throws  -> AccountRecov
 }
 
     /**
-     * The account's relay health from its held lists and the relay policy:
-     * one row per relay its inbox and NIP-65 lists name, and warnings about
-     * invitations sent through its published inbox list. Local read; never
-     * dials. Re-read on `RelayHealthChanged`.
+     * The account's relay health from its held lists, the relay policy and
+     * this process's inbox checks: one row per relay its inbox and NIP-65
+     * lists name, and warnings about invitations sent through its published
+     * inbox list. Local read; never dials. Re-read on `RelayHealthChanged`.
      */
 open func accountRelayHealth(accountRef: String)async throws  -> AccountRelayHealthFfi  {
     return
@@ -8011,6 +8026,37 @@ open func chatsClosedToLinkedDevices(accountRef: String)async throws  -> UInt32 
             freeFunc: ffi_marmot_uniffi_rust_future_free_u32,
             cancelFunc: ffi_marmot_uniffi_rust_future_cancel_u32,
             liftFunc: FfiConverterUInt32.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Check whether the account's inbox relays serve its inbox, and return
+     * the account's relay health after it. The account's worker runs it: one
+     * bounded read per allowed inbox relay (at most 16, 15 seconds each) on
+     * a connection of its own, answered with the signer the worker holds; a
+     * remote or host signer may be asked to sign a relay's authentication
+     * challenge. A relay the policy refuses is never dialed. Refused at once
+     * with `RelayCheckRunning` while a check of the account runs; without a
+     * running account worker it fails as the account not being active and
+     * dials nothing. A check no relay answered changes nothing. The returned
+     * health is the answer; `RelayHealthChanged` follows a changed answer
+     * from the worker.
+     */
+open func checkAccountRelays(accountRef: String)async throws  -> AccountRelayHealthFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_check_account_relays(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            cancelFunc: ffi_marmot_uniffi_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterTypeAccountRelayHealthFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -18393,7 +18439,8 @@ public func FfiConverterTypeAccountRecoveryStatusFfi_lower(_ value: AccountRecov
 
 
 /**
- * The account's relay health from its held lists and the relay policy.
+ * The account's relay health from its held lists, the relay policy and this
+ * process's inbox checks.
  */
 public struct AccountRelayHealthFfi {
     /**
@@ -38338,6 +38385,84 @@ public func FfiConverterTypeNotificationUserFfi_lower(_ value: NotificationUserF
 }
 
 
+public struct OnboardingCreatedInboxListFfi {
+    public var relays: [String]
+    public var eventId: String
+    public var publishedAt: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(relays: [String], eventId: String, publishedAt: UInt64) {
+        self.relays = relays
+        self.eventId = eventId
+        self.publishedAt = publishedAt
+    }
+}
+
+#if compiler(>=6)
+extension OnboardingCreatedInboxListFfi: Sendable {}
+#endif
+
+
+extension OnboardingCreatedInboxListFfi: Equatable, Hashable {
+    public static func ==(lhs: OnboardingCreatedInboxListFfi, rhs: OnboardingCreatedInboxListFfi) -> Bool {
+        if lhs.relays != rhs.relays {
+            return false
+        }
+        if lhs.eventId != rhs.eventId {
+            return false
+        }
+        if lhs.publishedAt != rhs.publishedAt {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(relays)
+        hasher.combine(eventId)
+        hasher.combine(publishedAt)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingCreatedInboxListFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingCreatedInboxListFfi {
+        return
+            try OnboardingCreatedInboxListFfi(
+                relays: FfiConverterSequenceString.read(from: &buf),
+                eventId: FfiConverterString.read(from: &buf),
+                publishedAt: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OnboardingCreatedInboxListFfi, into buf: inout [UInt8]) {
+        FfiConverterSequenceString.write(value.relays, into: &buf)
+        FfiConverterString.write(value.eventId, into: &buf)
+        FfiConverterUInt64.write(value.publishedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingCreatedInboxListFfi_lift(_ buf: RustBuffer) throws -> OnboardingCreatedInboxListFfi {
+    return try FfiConverterTypeOnboardingCreatedInboxListFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingCreatedInboxListFfi_lower(_ value: OnboardingCreatedInboxListFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingCreatedInboxListFfi.lower(value)
+}
+
+
 public struct OnboardingDevicePackageFfi {
     public var slotId: String
     public var keyPackageRefHex: String?
@@ -38589,16 +38714,36 @@ public struct OnboardingOptionsFfi {
      * Recommended kind-10050 inbox relays. Empty uses `default_relays`.
      */
     public var inboxRelays: [String]
+    /**
+     * Automatically publish a kind-10050 inbox list using the recommended
+     * default relay when complete discovery confirms none exists.
+     */
+    public var createMissingInboxList: Bool
+    /**
+     * Pass `SingleDevice` automatically when complete discovery finds
+     * `NoneFound`, while keeping `single_device_notice` in the snapshot.
+     */
+    public var passDeviceNoticeWhenNoneFound: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
     public init(defaultRelays: [String], discoveryRelays: [String],
         /**
          * Recommended kind-10050 inbox relays. Empty uses `default_relays`.
-         */inboxRelays: [String] = []) {
+         */inboxRelays: [String] = [],
+        /**
+         * Automatically publish a kind-10050 inbox list using the recommended
+         * default relay when complete discovery confirms none exists.
+         */createMissingInboxList: Bool = false,
+        /**
+         * Pass `SingleDevice` automatically when complete discovery finds
+         * `NoneFound`, while keeping `single_device_notice` in the snapshot.
+         */passDeviceNoticeWhenNoneFound: Bool = false) {
         self.defaultRelays = defaultRelays
         self.discoveryRelays = discoveryRelays
         self.inboxRelays = inboxRelays
+        self.createMissingInboxList = createMissingInboxList
+        self.passDeviceNoticeWhenNoneFound = passDeviceNoticeWhenNoneFound
     }
 }
 
@@ -38618,6 +38763,12 @@ extension OnboardingOptionsFfi: Equatable, Hashable {
         if lhs.inboxRelays != rhs.inboxRelays {
             return false
         }
+        if lhs.createMissingInboxList != rhs.createMissingInboxList {
+            return false
+        }
+        if lhs.passDeviceNoticeWhenNoneFound != rhs.passDeviceNoticeWhenNoneFound {
+            return false
+        }
         return true
     }
 
@@ -38625,6 +38776,8 @@ extension OnboardingOptionsFfi: Equatable, Hashable {
         hasher.combine(defaultRelays)
         hasher.combine(discoveryRelays)
         hasher.combine(inboxRelays)
+        hasher.combine(createMissingInboxList)
+        hasher.combine(passDeviceNoticeWhenNoneFound)
     }
 }
 
@@ -38639,7 +38792,9 @@ public struct FfiConverterTypeOnboardingOptionsFfi: FfiConverterRustBuffer {
             try OnboardingOptionsFfi(
                 defaultRelays: FfiConverterSequenceString.read(from: &buf),
                 discoveryRelays: FfiConverterSequenceString.read(from: &buf),
-                inboxRelays: FfiConverterSequenceString.read(from: &buf)
+                inboxRelays: FfiConverterSequenceString.read(from: &buf),
+                createMissingInboxList: FfiConverterBool.read(from: &buf),
+                passDeviceNoticeWhenNoneFound: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -38647,6 +38802,8 @@ public struct FfiConverterTypeOnboardingOptionsFfi: FfiConverterRustBuffer {
         FfiConverterSequenceString.write(value.defaultRelays, into: &buf)
         FfiConverterSequenceString.write(value.discoveryRelays, into: &buf)
         FfiConverterSequenceString.write(value.inboxRelays, into: &buf)
+        FfiConverterBool.write(value.createMissingInboxList, into: &buf)
+        FfiConverterBool.write(value.passDeviceNoticeWhenNoneFound, into: &buf)
     }
 }
 
@@ -39209,10 +39366,11 @@ public struct OnboardingSnapshotFfi {
     public var proposal: OnboardingRepairProposalFfi?
     public var singleDeviceNotice: OnboardingSingleDeviceNoticeFfi?
     public var cancellationPending: Bool
+    public var createdInboxList: OnboardingCreatedInboxListFfi?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(accountIdHex: String, recoveryEpoch: String?, revision: UInt64, ready: Bool, steps: [OnboardingStepStateFfi], proposal: OnboardingRepairProposalFfi?, singleDeviceNotice: OnboardingSingleDeviceNoticeFfi?, cancellationPending: Bool) {
+    public init(accountIdHex: String, recoveryEpoch: String?, revision: UInt64, ready: Bool, steps: [OnboardingStepStateFfi], proposal: OnboardingRepairProposalFfi?, singleDeviceNotice: OnboardingSingleDeviceNoticeFfi?, cancellationPending: Bool, createdInboxList: OnboardingCreatedInboxListFfi? = nil) {
         self.accountIdHex = accountIdHex
         self.recoveryEpoch = recoveryEpoch
         self.revision = revision
@@ -39221,6 +39379,7 @@ public struct OnboardingSnapshotFfi {
         self.proposal = proposal
         self.singleDeviceNotice = singleDeviceNotice
         self.cancellationPending = cancellationPending
+        self.createdInboxList = createdInboxList
     }
 }
 
@@ -39255,6 +39414,9 @@ extension OnboardingSnapshotFfi: Equatable, Hashable {
         if lhs.cancellationPending != rhs.cancellationPending {
             return false
         }
+        if lhs.createdInboxList != rhs.createdInboxList {
+            return false
+        }
         return true
     }
 
@@ -39267,6 +39429,7 @@ extension OnboardingSnapshotFfi: Equatable, Hashable {
         hasher.combine(proposal)
         hasher.combine(singleDeviceNotice)
         hasher.combine(cancellationPending)
+        hasher.combine(createdInboxList)
     }
 }
 
@@ -39286,7 +39449,8 @@ public struct FfiConverterTypeOnboardingSnapshotFfi: FfiConverterRustBuffer {
                 steps: FfiConverterSequenceTypeOnboardingStepStateFfi.read(from: &buf),
                 proposal: FfiConverterOptionTypeOnboardingRepairProposalFfi.read(from: &buf),
                 singleDeviceNotice: FfiConverterOptionTypeOnboardingSingleDeviceNoticeFfi.read(from: &buf),
-                cancellationPending: FfiConverterBool.read(from: &buf)
+                cancellationPending: FfiConverterBool.read(from: &buf),
+                createdInboxList: FfiConverterOptionTypeOnboardingCreatedInboxListFfi.read(from: &buf)
         )
     }
 
@@ -39299,6 +39463,7 @@ public struct FfiConverterTypeOnboardingSnapshotFfi: FfiConverterRustBuffer {
         FfiConverterOptionTypeOnboardingRepairProposalFfi.write(value.proposal, into: &buf)
         FfiConverterOptionTypeOnboardingSingleDeviceNoticeFfi.write(value.singleDeviceNotice, into: &buf)
         FfiConverterBool.write(value.cancellationPending, into: &buf)
+        FfiConverterOptionTypeOnboardingCreatedInboxListFfi.write(value.createdInboxList, into: &buf)
     }
 }
 
@@ -41914,13 +42079,22 @@ public struct RelayHealthRowFfi {
     public var roles: [RelayRoleFfi]
     public var state: RelayHealthStateFfi
     /**
-     * Set exactly when `state` is `NotAllowed`.
+     * Set when `state` is `NotAllowed`, `Failing` or `Suspected`.
      */
     public var fault: RelayHealthFaultFfi?
     /**
      * The connection state `account_relay_liveness` reports.
      */
     public var liveness: RelayStatusFfi
+    /**
+     * When the inbox check that decided `state` asked the relay, in Unix
+     * seconds; `None` while no check has established anything about it.
+     */
+    public var checkedAtUnix: UInt64?
+    /**
+     * An inbox check of this relay is running.
+     */
+    public var checking: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -41933,16 +42107,25 @@ public struct RelayHealthRowFfi {
          * In the order Inbox, Write, Read.
          */roles: [RelayRoleFfi], state: RelayHealthStateFfi,
         /**
-         * Set exactly when `state` is `NotAllowed`.
+         * Set when `state` is `NotAllowed`, `Failing` or `Suspected`.
          */fault: RelayHealthFaultFfi?,
         /**
          * The connection state `account_relay_liveness` reports.
-         */liveness: RelayStatusFfi) {
+         */liveness: RelayStatusFfi,
+        /**
+         * When the inbox check that decided `state` asked the relay, in Unix
+         * seconds; `None` while no check has established anything about it.
+         */checkedAtUnix: UInt64?,
+        /**
+         * An inbox check of this relay is running.
+         */checking: Bool) {
         self.url = url
         self.roles = roles
         self.state = state
         self.fault = fault
         self.liveness = liveness
+        self.checkedAtUnix = checkedAtUnix
+        self.checking = checking
     }
 }
 
@@ -41968,6 +42151,12 @@ extension RelayHealthRowFfi: Equatable, Hashable {
         if lhs.liveness != rhs.liveness {
             return false
         }
+        if lhs.checkedAtUnix != rhs.checkedAtUnix {
+            return false
+        }
+        if lhs.checking != rhs.checking {
+            return false
+        }
         return true
     }
 
@@ -41977,6 +42166,8 @@ extension RelayHealthRowFfi: Equatable, Hashable {
         hasher.combine(state)
         hasher.combine(fault)
         hasher.combine(liveness)
+        hasher.combine(checkedAtUnix)
+        hasher.combine(checking)
     }
 }
 
@@ -41993,7 +42184,9 @@ public struct FfiConverterTypeRelayHealthRowFfi: FfiConverterRustBuffer {
                 roles: FfiConverterSequenceTypeRelayRoleFfi.read(from: &buf),
                 state: FfiConverterTypeRelayHealthStateFfi.read(from: &buf),
                 fault: FfiConverterOptionTypeRelayHealthFaultFfi.read(from: &buf),
-                liveness: FfiConverterTypeRelayStatusFfi.read(from: &buf)
+                liveness: FfiConverterTypeRelayStatusFfi.read(from: &buf),
+                checkedAtUnix: FfiConverterOptionUInt64.read(from: &buf),
+                checking: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -42003,6 +42196,8 @@ public struct FfiConverterTypeRelayHealthRowFfi: FfiConverterRustBuffer {
         FfiConverterTypeRelayHealthStateFfi.write(value.state, into: &buf)
         FfiConverterOptionTypeRelayHealthFaultFfi.write(value.fault, into: &buf)
         FfiConverterTypeRelayStatusFfi.write(value.liveness, into: &buf)
+        FfiConverterOptionUInt64.write(value.checkedAtUnix, into: &buf)
+        FfiConverterBool.write(value.checking, into: &buf)
     }
 }
 
@@ -45689,6 +45884,8 @@ public struct TimelineReplyPreviewFfi {
      * Where the previewed message sits in a NIP-22 thread.
      */
     public var thread: TimelineThreadRefFfi?
+    public var retentionSeconds: UInt64?
+    public var retentionExpiresAt: UInt64?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -45710,7 +45907,7 @@ public struct TimelineReplyPreviewFfi {
          */invalidationStatus: String?,
         /**
          * Where the previewed message sits in a NIP-22 thread.
-         */thread: TimelineThreadRefFfi?) {
+         */thread: TimelineThreadRefFfi?, retentionSeconds: UInt64?, retentionExpiresAt: UInt64?) {
         self.messageIdHex = messageIdHex
         self.replyToMessageIdHex = replyToMessageIdHex
         self.sender = sender
@@ -45724,6 +45921,8 @@ public struct TimelineReplyPreviewFfi {
         self.deletionSource = deletionSource
         self.invalidationStatus = invalidationStatus
         self.thread = thread
+        self.retentionSeconds = retentionSeconds
+        self.retentionExpiresAt = retentionExpiresAt
     }
 }
 
@@ -45773,6 +45972,12 @@ extension TimelineReplyPreviewFfi: Equatable, Hashable {
         if lhs.thread != rhs.thread {
             return false
         }
+        if lhs.retentionSeconds != rhs.retentionSeconds {
+            return false
+        }
+        if lhs.retentionExpiresAt != rhs.retentionExpiresAt {
+            return false
+        }
         return true
     }
 
@@ -45790,6 +45995,8 @@ extension TimelineReplyPreviewFfi: Equatable, Hashable {
         hasher.combine(deletionSource)
         hasher.combine(invalidationStatus)
         hasher.combine(thread)
+        hasher.combine(retentionSeconds)
+        hasher.combine(retentionExpiresAt)
     }
 }
 
@@ -45814,7 +46021,9 @@ public struct FfiConverterTypeTimelineReplyPreviewFfi: FfiConverterRustBuffer {
                 deleted: FfiConverterBool.read(from: &buf),
                 deletionSource: FfiConverterTypeDeletionSourceFfi.read(from: &buf),
                 invalidationStatus: FfiConverterOptionString.read(from: &buf),
-                thread: FfiConverterOptionTypeTimelineThreadRefFfi.read(from: &buf)
+                thread: FfiConverterOptionTypeTimelineThreadRefFfi.read(from: &buf),
+                retentionSeconds: FfiConverterOptionUInt64.read(from: &buf),
+                retentionExpiresAt: FfiConverterOptionUInt64.read(from: &buf)
         )
     }
 
@@ -45832,6 +46041,8 @@ public struct FfiConverterTypeTimelineReplyPreviewFfi: FfiConverterRustBuffer {
         FfiConverterTypeDeletionSourceFfi.write(value.deletionSource, into: &buf)
         FfiConverterOptionString.write(value.invalidationStatus, into: &buf)
         FfiConverterOptionTypeTimelineThreadRefFfi.write(value.thread, into: &buf)
+        FfiConverterOptionUInt64.write(value.retentionSeconds, into: &buf)
+        FfiConverterOptionUInt64.write(value.retentionExpiresAt, into: &buf)
     }
 }
 
@@ -54404,6 +54615,12 @@ public enum InviteDeliveryProblemFfi {
      * produced.
      */
     case keyPackageRetired
+    /**
+     * No usable inbox relay is known for the recipient, and MDK's latest
+     * lookup of their inbox relay list failed (no relay answered in full or
+     * in time). MDK looks it up again at its next retry.
+     */
+    case inboxLookupFailed
 }
 
 
@@ -54432,6 +54649,8 @@ public struct FfiConverterTypeInviteDeliveryProblemFfi: FfiConverterRustBuffer {
         case 5: return .tooLarge
 
         case 6: return .keyPackageRetired
+
+        case 7: return .inboxLookupFailed
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -54463,6 +54682,10 @@ public struct FfiConverterTypeInviteDeliveryProblemFfi: FfiConverterRustBuffer {
 
         case .keyPackageRetired:
             writeInt(&buf, Int32(6))
+
+
+        case .inboxLookupFailed:
+            writeInt(&buf, Int32(7))
 
         }
     }
@@ -54519,9 +54742,9 @@ public enum InviteDeliveryStateFfi {
      */
     case relayAccepted
     /**
-     * It will not be sent again: no relay stored it by its delivery
-     * deadline, 7 days after the invite or its KeyPackage's expiry if
-     * sooner. `cause` is what the latest attempt found
+     * It will not be sent again: no relay acknowledged it by its delivery
+     * deadline, 7 days after it was staged with the invite or its
+     * KeyPackage's expiry if sooner. `cause` is what the latest attempt found
      * (`RelaysUnreachable` when none finished); `RefusedByRelays` here means
      * every relay that attempt tried said no, possibly only for now.
      */
@@ -56182,11 +56405,13 @@ public enum MarmotEventFfi {
     )
     /**
      * The account's relay health changed: re-read `account_relay_health`.
-     * Fires when its answer, apart from each row's liveness, differs from
-     * the one last announced, which only a change to the account's held
-     * relay lists causes, and once each time the account's worker starts;
-     * never for a relay connecting or disconnecting (see
-     * `subscribe_relay_liveness`). Carries no relays.
+     * Fires when its answer, apart from each row's liveness,
+     * `checked_at_unix` and `checking`, differs from the one last announced,
+     * which a change to the account's held relay lists or a state an inbox
+     * check established causes, and once each time the account's worker
+     * starts. It follows the relay lists and check results, not connects and
+     * disconnects: connection changes come from `subscribe_relay_liveness`.
+     * A check that confirms every state fires nothing. Carries no relays.
      * Only a running account worker sends it: a list that changes while
      * none runs (an external-signer account whose signer is not registered,
      * say) announces nothing, so read the query when the account starts and
@@ -56999,6 +57224,11 @@ public enum MarmotKitError: Swift.Error {
      * Ask the recipient to update their client and publish a compatible KeyPackage.
      */
     case IncompatibleKeyPackage
+    /**
+     * A relay check of the account is running; nothing more was checked.
+     * Ask again once its rows stop saying `checking`.
+     */
+    case RelayCheckRunning
 }
 
 
@@ -57294,6 +57524,7 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
             )
         case 125: return .ReactionNotFound
         case 126: return .IncompatibleKeyPackage
+        case 127: return .RelayCheckRunning
 
          default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -57889,6 +58120,10 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
 
         case .IncompatibleKeyPackage:
             writeInt(&buf, Int32(126))
+
+
+        case .RelayCheckRunning:
+            writeInt(&buf, Int32(127))
 
         }
     }
@@ -60362,6 +60597,7 @@ public enum OnboardingIssueFfi {
     case otherInstallationPossible
     case discoveryIncomplete
     case inspectionCompleted
+    case rateLimited
 }
 
 
@@ -60422,6 +60658,8 @@ public struct FfiConverterTypeOnboardingIssueFfi: FfiConverterRustBuffer {
         case 21: return .discoveryIncomplete
 
         case 22: return .inspectionCompleted
+
+        case 23: return .rateLimited
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -60517,6 +60755,10 @@ public struct FfiConverterTypeOnboardingIssueFfi: FfiConverterRustBuffer {
 
         case .inspectionCompleted:
             writeInt(&buf, Int32(22))
+
+
+        case .rateLimited:
+            writeInt(&buf, Int32(23))
 
         }
     }
@@ -62435,25 +62677,55 @@ extension RelayEndpointPolicyFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
- * Why a relay is not allowed. Later versions may add faults: keep a default
- * branch.
+ * Why a row is not `Unchecked` or `Healthy`. Later versions may add faults:
+ * keep a default branch.
  */
 
 public enum RelayHealthFaultFfi {
 
     /**
-     * On the retired-relay list.
+     * `NotAllowed`: on the retired-relay list.
      */
     case retired
     /**
-     * Not a relay URL.
+     * `NotAllowed`: not a relay URL.
      */
     case invalid
     /**
-     * A host this device refuses to dial: plaintext, a private address,
-     * localhost or onion.
+     * `NotAllowed`: a host this device refuses to dial: plaintext, a private
+     * address, localhost or onion.
      */
     case unsafe
+    /**
+     * `Failing`, or `Suspected` under a remote or host signer: the relay
+     * required authentication and did not accept the account's.
+     */
+    case authenticationRequired
+    /**
+     * `Failing`, or `Suspected` under a remote or host signer: the relay
+     * required payment.
+     */
+    case paymentRequired
+    /**
+     * `Failing`, or `Suspected` under a remote or host signer: the relay
+     * restricted or blocked the account.
+     */
+    case restricted
+    /**
+     * `Suspected`: no connection, while another relay of the same check
+     * answered.
+     */
+    case unreachable
+    /**
+     * `Suspected`: no answer in time, while another relay of the same check
+     * answered.
+     */
+    case timedOut
+    /**
+     * `Suspected`: the relay ended the query without naming a refusal, or
+     * sent more than it was asked for.
+     */
+    case unexplained
 }
 
 
@@ -62477,6 +62749,18 @@ public struct FfiConverterTypeRelayHealthFaultFfi: FfiConverterRustBuffer {
 
         case 3: return .unsafe
 
+        case 4: return .authenticationRequired
+
+        case 5: return .paymentRequired
+
+        case 6: return .restricted
+
+        case 7: return .unreachable
+
+        case 8: return .timedOut
+
+        case 9: return .unexplained
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -62495,6 +62779,30 @@ public struct FfiConverterTypeRelayHealthFaultFfi: FfiConverterRustBuffer {
 
         case .unsafe:
             writeInt(&buf, Int32(3))
+
+
+        case .authenticationRequired:
+            writeInt(&buf, Int32(4))
+
+
+        case .paymentRequired:
+            writeInt(&buf, Int32(5))
+
+
+        case .restricted:
+            writeInt(&buf, Int32(6))
+
+
+        case .unreachable:
+            writeInt(&buf, Int32(7))
+
+
+        case .timedOut:
+            writeInt(&buf, Int32(8))
+
+
+        case .unexplained:
+            writeInt(&buf, Int32(9))
 
         }
     }
@@ -62526,26 +62834,35 @@ extension RelayHealthFaultFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
- * What MDK knows of a relay. Only `Unchecked` and `NotAllowed` are produced
- * yet; `Healthy`, `Suspected` and `Failing` are reserved for relay checks.
+ * What MDK knows of a relay. `Healthy`, `Suspected` and `Failing` come from
+ * an inbox check (`check_account_relays`, or the account worker's own check
+ * at its start) and describe one read of the account's inbox at the row's
+ * `checked_at_unix`; they apply to inbox rows only and last while the
+ * account's worker runs its current client. Later versions may add states: keep a default branch.
  */
 
 public enum RelayHealthStateFfi {
 
     /**
-     * Allowed, and not checked.
+     * Allowed, and no check has established anything about it.
      */
     case unchecked
     /**
-     * Not produced yet.
+     * The relay answered the inbox check: it ended a query for this
+     * account's gift wraps with EOSE, retried after authenticating when it
+     * asked for that. An EOSE saying the relay may withhold events until
+     * authentication still counts.
      */
     case healthy
     /**
-     * Not produced yet.
+     * The check could not verify the relay; `fault` says why. Render it as
+     * "could not verify", never as a failure.
      */
     case suspected
     /**
-     * Not produced yet.
+     * The relay refused to serve this account's inbox when checked, with the
+     * account's own key answering any authentication challenge; `fault` says
+     * how. Asking again does not change a refusal like that.
      */
     case failing
     /**
@@ -63075,25 +63392,35 @@ public enum RelayWarningKindFfi {
      */
     case inboxListEmpty
     /**
-     * Critical: the published inbox list names relays but the policy allows
-     * none, so an invitation sent through the list cannot reach this device.
-     * A sender on this same install (another local account, or this account
-     * linking a new device) resolves the route through the same fallback to
-     * the defaults and may still get through. `relays` are the refused
-     * entries.
+     * Critical: the published inbox list names relays and each is refused
+     * by the policy or `Failing`. This device never listens on a refused
+     * one, and each failing one refused to serve this account's inbox when
+     * checked. When the policy allows none, a sender on this same install
+     * (another local account, or this account linking a new device)
+     * resolves the route through the same fallback to the defaults and may
+     * still get through. `relays` are every entry. An `Unchecked` or
+     * `Suspected` entry never raises it.
      */
     case noAllowedInboxRelay
     /**
-     * Warning: some entries are refused beside at least one allowed; an
-     * invitation sent only to the refused ones does not reach this device.
-     * `relays` are the refused entries.
+     * Warning: some entries are refused beside at least one allowed entry
+     * that is not `Failing`; an invitation sent only to the refused ones does
+     * not reach this device. `relays` are the refused entries.
      */
     case inboxRelaysNotAllowed
     /**
-     * Notice: exactly one entry is allowed, so an invitation sent through the
-     * list reaches this device only there. `relays` is that relay.
+     * Notice: exactly one entry is allowed and not `Failing`, so an
+     * invitation sent through the list reaches this device at most there.
+     * `relays` is that relay.
      */
     case singleInboxRelay
+    /**
+     * Warning: some entries are `Failing` beside at least one allowed entry
+     * that is not: each failing relay refused to serve this account's inbox
+     * when checked (see its row's `checked_at_unix`). `relays` are the
+     * failing entries.
+     */
+    case inboxRelayFailing
 }
 
 
@@ -63119,6 +63446,8 @@ public struct FfiConverterTypeRelayWarningKindFfi: FfiConverterRustBuffer {
 
         case 4: return .singleInboxRelay
 
+        case 5: return .inboxRelayFailing
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -63141,6 +63470,10 @@ public struct FfiConverterTypeRelayWarningKindFfi: FfiConverterRustBuffer {
 
         case .singleInboxRelay:
             writeInt(&buf, Int32(4))
+
+
+        case .inboxRelayFailing:
+            writeInt(&buf, Int32(5))
 
         }
     }
@@ -65826,6 +66159,30 @@ fileprivate struct FfiConverterOptionTypeNotificationUpdateFfi: FfiConverterRust
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeNotificationUpdateFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeOnboardingCreatedInboxListFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OnboardingCreatedInboxListFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeOnboardingCreatedInboxListFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeOnboardingCreatedInboxListFfi.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -70344,7 +70701,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_recovery_status() != 28753) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_account_relay_health() != 20866) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_account_relay_health() != 5163) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_relay_lists() != 47794) {
@@ -70510,6 +70867,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_chats_closed_to_linked_devices() != 20669) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_check_account_relays() != 11162) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_check_sign_ins() != 11396) {

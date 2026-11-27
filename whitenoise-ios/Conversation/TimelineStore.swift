@@ -507,7 +507,11 @@ final class TimelineStore {
         let accountId = myAccountId
         if clusterCalendar != calendar || clusterAccountId != accountId {
             messageClusterPresentations = MessageClusterProjection.presentations(
-                for: timeline, historyImportBoundaries: historyImportBoundaries, myAccountId: accountId, calendar: calendar
+                for: timeline,
+                historyImportBoundaries: historyImportBoundaries,
+                nonClusterableMessageIds: Set(agentItemProjectionByMessageId.keys),
+                myAccountId: accountId,
+                calendar: calendar
             )
             clusterCalendar = calendar
             clusterAccountId = accountId
