@@ -185074,6 +185074,204 @@
         }
       }
     },
+    "Turning on linked devices" : {
+      "comment" : "Pending toast title after an admin turned on linked devices for a chat that the group hasn't confirmed yet.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verknüpfte Geräte werden aktiviert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activando los dispositivos vinculados"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otetaan yhdistettyjä laitteita käyttöön"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activation des appareils associés"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attivazione dei dispositivi collegati"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ativando dispositivos vinculados"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Включение привязанных устройств"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bağlı cihazlar açılıyor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在开启已关联设备"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在開啟已連結裝置"
+          }
+        }
+      }
+    },
+    "Members’ linked devices can join once the group confirms this change." : {
+      "comment" : "Pending toast message after turning on linked devices for a chat, before the group confirms the change.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verknüpfte Geräte der Mitglieder können beitreten, sobald die Gruppe diese Änderung bestätigt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los dispositivos vinculados de los miembros podrán unirse cuando el grupo confirme este cambio."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jäsenten yhdistetyt laitteet voivat liittyä, kun ryhmä vahvistaa tämän muutoksen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les appareils associés des membres pourront rejoindre la discussion une fois que le groupe aura confirmé ce changement."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I dispositivi collegati dei membri potranno unirsi quando il gruppo confermerà questa modifica."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os dispositivos vinculados dos membros poderão entrar quando o grupo confirmar esta alteração."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Привязанные устройства участников смогут присоединиться, когда группа подтвердит это изменение."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Üyelerin bağlı cihazları, grup bu değişikliği onayladığında katılabilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "群组确认此更改后，成员的已关联设备即可加入。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "群組確認此變更後，成員的已連結裝置即可加入。"
+          }
+        }
+      }
+    },
+    "Waiting for the group to confirm. Members’ linked devices can join once it does." : {
+      "comment" : "Chat details nudge footer while turning on linked devices waits for the group to confirm the change.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warten auf die Bestätigung der Gruppe. Verknüpfte Geräte der Mitglieder können danach beitreten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esperando a que el grupo confirme. Los dispositivos vinculados de los miembros podrán unirse cuando lo haga."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odotetaan ryhmän vahvistusta. Jäsenten yhdistetyt laitteet voivat liittyä sen jälkeen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente de la confirmation du groupe. Les appareils associés des membres pourront ensuite rejoindre la discussion."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In attesa della conferma del gruppo. I dispositivi collegati dei membri potranno unirsi dopo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aguardando a confirmação do grupo. Os dispositivos vinculados dos membros poderão entrar depois."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ожидание подтверждения группы. После этого привязанные устройства участников смогут присоединиться."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grubun onaylaması bekleniyor. Onayladığında üyelerin bağlı cihazları katılabilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待群组确认。确认后，成员的已关联设备即可加入。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待群組確認。確認後，成員的已連結裝置即可加入。"
+          }
+        }
+      }
+    },
     "Couldn’t turn on linked devices" : {
       "comment" : "Error toast title when linked devices couldn't be turned on for a chat.",
       "extractionState" : "manual",

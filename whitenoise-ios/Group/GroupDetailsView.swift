@@ -791,7 +791,11 @@ struct GroupDetailsView: View {
             }
             .padding(.vertical, 4)
             Button("Turn On Linked Devices") { model.confirmsEnableAccountDevices = true }
-                .disabled(model.membershipActionInFlight)
+                .disabled(model.membershipActionInFlight || model.accountDevicesAwaitingConfirmation)
+        } footer: {
+            if model.accountDevicesAwaitingConfirmation {
+                Text("Waiting for the group to confirm. Members’ linked devices can join once it does.")
+            }
         }
     }
 

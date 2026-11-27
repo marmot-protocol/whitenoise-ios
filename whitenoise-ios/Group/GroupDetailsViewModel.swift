@@ -27,6 +27,7 @@ final class GroupDetailsViewModel {
     /// Whether members' linked devices may join; nil until read or without device groups.
     var accountDevicesActivation: AccountDevicesActivationFfi?
     var confirmsEnableAccountDevices = false
+    var accountDevicesAwaitingConfirmation = false
     /// Asks before acknowledging MDK's advisory refusals of a group change.
     @ObservationIgnored let advisoryPrompter = GroupChangeAdvisoryPrompter()
     var membershipActionInFlight = false
@@ -469,6 +470,9 @@ final class GroupDetailsViewModel {
         guard conversation.group.groupIdHex == groupIdHex, appState.runtimeGeneration == generation,
               appState.activeAccountRef == accountRef else { return }
         accountDevicesActivation = activation
+        if let activation, activation != .eligible {
+            accountDevicesAwaitingConfirmation = false
+        }
     }
 
     func enableAccountDevices(using appState: AppState) async {
@@ -488,11 +492,24 @@ final class GroupDetailsViewModel {
             conversation.applyGroupMutation(result)
             onGroupChanged(conversation.group)
             await loadAccountDevicesActivation(using: appState)
-            Haptics.success()
-            appState.present(.success(
-                L10n.string("Linked devices turned on"),
-                message: L10n.string("Members’ linked devices can now join this chat.")
-            ))
+            switch AccountDevicesActivationOutcome(
+                disposition: result.summary.acceptDisposition,
+                activation: accountDevicesActivation
+            ) {
+            case .confirmed:
+                accountDevicesAwaitingConfirmation = false
+                Haptics.success()
+                appState.present(.success(
+                    L10n.string("Linked devices turned on"),
+                    message: L10n.string("Members’ linked devices can now join this chat.")
+                ))
+            case .pending:
+                accountDevicesAwaitingConfirmation = true
+                appState.present(.warning(
+                    L10n.string("Turning on linked devices"),
+                    message: L10n.string("Members’ linked devices can join once the group confirms this change.")
+                ))
+            }
         } catch {
             await refreshAfterFailedMutation(using: appState)
             await loadAccountDevicesActivation(using: appState)
