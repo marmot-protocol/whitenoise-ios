@@ -4373,7 +4373,6 @@ private struct FullscreenMediaPrepared: Identifiable {
     let id: String
     let item: MessageMediaAttachment
     let data: Data?
-    let contentType: UTType
     var pendingSelection: MessageMediaGallery.PendingSelection? = nil
 }
 
@@ -4382,24 +4381,6 @@ private struct ForwardMediaPayload: Identifiable {
     let item: MessageMediaAttachment
     let data: Data
     var pendingSelection: MessageMediaGallery.PendingSelection? = nil
-}
-
-private struct DecryptedMediaExportDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.data] }
-
-    let data: Data
-
-    init(data: Data) {
-        self.data = data
-    }
-
-    init(configuration: ReadConfiguration) throws {
-        data = configuration.file.regularFileContents ?? Data()
-    }
-
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        FileWrapper(regularFileWithContents: data)
-    }
 }
 
 enum MessageMediaFullscreenPresentation {
@@ -4531,14 +4512,13 @@ struct MessageMediaFullscreenGalleryView: View {
     @State private var handoffControl: MediaFileTransferControlFfi?
     @State private var mediaActionTask: Task<Void, Never>?
     @State private var mediaActionTaskID: UUID?
-    @State private var exportDocument: DecryptedMediaExportDocument?
-    @State private var saveProductTicket: ProductAnalyticsRecorder.Ticket?
-    @State private var isExporting = false
+    @State private var saveFailure: MediaSaveFailure?
     @State private var actionError: String?
     @State private var forwardMedia: ForwardMediaPayload?
     @State private var chrome = MediaViewerChrome()
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
 
     init(
         gallery: MessageMediaGallery,
@@ -4590,8 +4570,7 @@ struct MessageMediaFullscreenGalleryView: View {
             case .unavailable: onDismiss(); return
             case .confirmed(let item): replacement = item
             }
-            preparedMedia = FullscreenMediaPrepared(id: replacement.id, item: replacement, data: pendingSelection.data,
-                contentType: UTType(mimeType: replacement.mediaType) ?? .data)
+            preparedMedia = FullscreenMediaPrepared(id: replacement.id, item: replacement, data: pendingSelection.data)
             let wasPlaying = pendingVideo.wantsPlayback ?? selection.demand(for: pendingSelection.id,
                 allowsOpeningDemand: !restored && transcriptHistory?.allowsOpeningDemand != false).isUserInitiated
             selection.confirm(replacement.id, resumeVideo: replacement.isVideo && wasPlaying)
@@ -4634,21 +4613,27 @@ struct MessageMediaFullscreenGalleryView: View {
                 .appAppearance()
             }
         }
-        .fileExporter(
-            isPresented: $isExporting,
-            document: exportDocument,
-            contentType: preparedMedia?.contentType ?? .data,
-            defaultFilename: preparedMedia?.item.fileName ?? "Media"
-        ) { result in
-            let outcome: ProductOutcome
-            switch result {
-            case .success: outcome = .success
-            case .failure(let error): outcome = (error as NSError).code == NSUserCancelledError ? .cancelled : .failure
+        .alert(
+            saveFailure == .photosAccessDenied
+                ? L10n.string("Allow Access to Photos") : L10n.string("Couldn't Save to Photos"),
+            isPresented: Binding(
+                get: { saveFailure != nil },
+                set: { if !$0 { saveFailure = nil } }
+            ),
+            presenting: saveFailure
+        ) { failure in
+            if failure == .photosAccessDenied {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
             }
-            appState.productAnalytics.record(.attachment(.save, outcome), ticket: saveProductTicket)
-            saveProductTicket = nil
-            if case .failure = result {
-                actionError = L10n.string("Couldn't save media.")
+            Button("OK", role: .cancel) {}
+        } message: { failure in
+            switch failure {
+            case .photosAccessDenied:
+                Text("To save photos and videos, allow White Noise to add to your photo library in Settings.")
+            case .unsupported:
+                Text("Photos can't save this file. Use Share, then Save to Files.")
             }
         }
         .alert(
@@ -4696,7 +4681,7 @@ struct MessageMediaFullscreenGalleryView: View {
             onData: { data in
                 guard selectedItemID == item.id, selectedItem != nil else { return }
                 preparedMedia = FullscreenMediaPrepared(id: item.id, item: item, data: data,
-                    contentType: UTType(mimeType: item.mediaType) ?? .data, pendingSelection: gallery.pendingSelection(for: item.id))
+                    pendingSelection: gallery.pendingSelection(for: item.id))
             },
             onToggleChrome: toggleChrome,
             onSourceReplaced: {
@@ -4750,7 +4735,7 @@ struct MessageMediaFullscreenGalleryView: View {
     private var currentPreparedMedia: FullscreenMediaPrepared? {
         guard let selectedItem, let preparedMedia, selectedItem.canUseBytesPrepared(for: preparedMedia.item) else { return nil }
         return FullscreenMediaPrepared(id: selectedItem.id, item: selectedItem, data: preparedMedia.data,
-            contentType: preparedMedia.contentType, pendingSelection: preparedMedia.pendingSelection)
+            pendingSelection: preparedMedia.pendingSelection)
     }
 
 
@@ -4785,36 +4770,48 @@ struct MessageMediaFullscreenGalleryView: View {
     }
 
     private func saveSelectedMedia() {
-        guard let prepared = currentPreparedMedia else { return }
-        if let data = prepared.data {
-            saveProductTicket = appState.productAnalytics.ticket()
-            exportDocument = DecryptedMediaExportDocument(data: data)
-            isExporting = true
+        guard let item = currentPreparedMedia?.item, handoffControl == nil else { return }
+        let ticket = appState.productAnalytics.ticket()
+        guard let destination = MediaSaveDestination.resource(forMIMEType: item.mediaType) else {
+            appState.productAnalytics.record(.attachment(.save, .failure), ticket: ticket)
+            saveFailure = .unsupported
             return
         }
-        guard mediaActionTask == nil else { return }
-        let item = prepared.item
-        let taskID = UUID()
-        mediaActionTaskID = taskID
-        mediaActionTask = Task {
-            defer {
-                if mediaActionTaskID == taskID {
-                    mediaActionTask = nil
-                    mediaActionTaskID = nil
-                }
-            }
-            do {
-                let data = try await onLoadMedia.data(for: item, demand: .explicit)
-                guard !Task.isCancelled, selectedItemID == item.id else { return }
-                saveProductTicket = appState.productAnalytics.ticket()
-                exportDocument = DecryptedMediaExportDocument(data: data)
-                isExporting = true
-            } catch {
-                if !Task.isCancelled, selectedItemID == item.id {
-                    actionError = L10n.string("Couldn't prepare media.")
-                }
-            }
+        let control = MediaFileTransferControlFfi()
+        handoffControl = control
+        Task {
+            defer { if handoffControl === control { handoffControl = nil } }
+            let outcome = await saveToPhotos(item, as: destination, control: control)
+            appState.productAnalytics.record(.attachment(.save, outcome), ticket: ticket)
         }
+    }
+
+    private func saveToPhotos(_ item: MessageMediaAttachment, as destination: MediaSaveDestination,
+                              control: MediaFileTransferControlFfi) async -> ProductOutcome {
+        guard await PhotoLibrarySaver.requestAddAccess() else {
+            saveFailure = .photosAccessDenied
+            return .failure
+        }
+        let file: AttachmentShareFile
+        do {
+            file = try await gallery.shareFile(for: item, using: onLoadMedia, control: control,
+                verify: transcriptHistory?.verify)
+        } catch AttachmentHandoffFailure.storageFull {
+            return .failure
+        } catch {
+            if control.isCancelled() { return .cancelled }
+            actionError = L10n.string("Couldn't prepare media.")
+            return .failure
+        }
+        defer { file.finish() }
+        do {
+            try await PhotoLibrarySaver.save(fileURL: file.url, as: destination, mimeType: item.mediaType)
+        } catch {
+            saveFailure = .unsupported
+            return .failure
+        }
+        appState.present(.success(L10n.string("Saved to Photos")))
+        return .success
     }
 
     private func forwardSelectedMedia() {

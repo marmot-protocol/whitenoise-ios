@@ -557,6 +557,30 @@ microphone on a Mac without one.
       read together; Remove is offered as an action), Dynamic Type at an
       accessibility size, and light and dark appearance.
 
+### Save to Photos from the media viewer
+
+Save in the fullscreen gallery and the transcript media sheet adds the original
+file to Photos from MDK's handoff lease; Files stays reachable through Share.
+
+- [ ] First Save after a fresh install shows the add-only Photos prompt with the
+      "only when you tap Save or choose to save them from the share sheet" copy
+      (in Spanish: "solo cuando tocas Guardar o eliges guardarlos desde el menú
+      para compartir"). Allow it: an image is added to Photos with no Files
+      picker, and a "Saved to Photos" toast ("Guardado en Fotos") appears.
+- [ ] Save a video: it lands in Photos as a playable video. Save a ~200 MB
+      video and watch the memory gauge: no spike near the file size.
+- [ ] Save an animated GIF: Photos keeps it animated.
+- [ ] While saving, `<account>/handoff/<lease>/` exists; once the toast shows
+      (or the save fails) the lease folder is gone within a second.
+- [ ] Deny the Photos prompt (or turn it off in Settings → White Noise →
+      Photos), then tap Save. An "Allow Access to Photos" alert ("Permitir
+      acceso a Fotos") offers Open Settings, which opens the app's settings;
+      nothing is copied under `handoff/`.
+- [ ] Save media whose type Photos cannot take (for example a WebP on an OS
+      that rejects it, or an unusual image type): a "Couldn't Save to Photos"
+      alert ("No se pudo guardar en Fotos") points to Share → Save to Files,
+      and Share → Save to Files still delivers the original file.
+
 ### Document sharing through MDK handoff leases
 
 Tapping a received document, or its share button in View Shared Media → Files,

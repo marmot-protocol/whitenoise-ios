@@ -375,67 +375,67 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise speichert Fotos und Videos nur in deiner Fotomediathek, wenn du sie über das Teilen-Menü speicherst."
+            "value" : "White Noise speichert Fotos und Videos nur in deiner Fotomediathek, wenn du auf „Speichern“ tippst oder sie über das Teilen-Menü speicherst."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise saves photos and videos to your photo library only when you choose to save them from the share sheet."
+            "value" : "White Noise saves photos and videos to your photo library only when you tap Save or choose to save them from the share sheet."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise guarda fotos y videos en tu fototeca solo cuando eliges guardarlos desde el menú para compartir."
+            "value" : "White Noise guarda fotos y videos en tu fototeca solo cuando tocas Guardar o eliges guardarlos desde el menú para compartir."
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise tallentaa kuvia ja videoita kuvakirjastoosi vain, kun päätät tallentaa ne jakovalikosta."
+            "value" : "White Noise tallentaa kuvia ja videoita kuvakirjastoosi vain, kun napautat Tallenna tai päätät tallentaa ne jakovalikosta."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise enregistre des photos et des vidéos dans votre photothèque uniquement lorsque vous choisissez de les enregistrer depuis le menu de partage."
+            "value" : "White Noise enregistre des photos et des vidéos dans votre photothèque uniquement lorsque vous touchez Enregistrer ou choisissez de les enregistrer depuis le menu de partage."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise salva foto e video nella tua libreria solo quando scegli di salvarli dal menu di condivisione."
+            "value" : "White Noise salva foto e video nella tua libreria solo quando tocchi Salva o scegli di salvarli dal menu di condivisione."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O White Noise salva fotos e vídeos na sua fototeca somente quando você escolhe salvá-los pelo menu de compartilhamento."
+            "value" : "O White Noise salva fotos e vídeos na sua fototeca somente quando você toca em Salvar ou escolhe salvá-los pelo menu de compartilhamento."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise сохраняет фото и видео в вашу медиатеку, только когда вы выбираете сохранение в меню «Поделиться»."
+            "value" : "White Noise сохраняет фото и видео в вашу медиатеку, только когда вы нажимаете «Сохранить» или выбираете сохранение в меню «Поделиться»."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise, fotoğraf ve videoları yalnızca paylaşım menüsünden kaydetmeyi seçtiğinizde fotoğraf arşivinize kaydeder."
+            "value" : "White Noise, fotoğraf ve videoları yalnızca Kaydet'e dokunduğunuzda veya paylaşım menüsünden kaydetmeyi seçtiğinizde fotoğraf arşivinize kaydeder."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise 仅在你选择从分享菜单保存照片和视频时，将它们存入你的照片图库。"
+            "value" : "White Noise 仅在你轻点“保存”或选择从分享菜单保存照片和视频时，将它们存入你的照片图库。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise 只會在你選擇從分享選單儲存照片和影片時，將它們存入你的照片圖庫。"
+            "value" : "White Noise 只會在你點一下「儲存」或選擇從分享選單儲存照片和影片時，將它們存入你的照片圖庫。"
           }
         }
       }
