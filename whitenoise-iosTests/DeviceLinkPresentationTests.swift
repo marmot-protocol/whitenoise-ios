@@ -169,6 +169,17 @@ struct DeviceLinkPresentationTests {
         ))
     }
 
+    @Test func removalPendingTakesPrecedenceOverInactiveChoicesAndStatus() {
+        let pending = linkedDevice(slot: hex("a"), status: .inactive, removalPending: true)
+        #expect(!LinkedDevicePresentation.offersInactiveChoice(pending))
+        #expect(LinkedDevicePresentation.status(pending) == LinkedDevicePresentation.status(
+            linkedDevice(slot: hex("b"), removalPending: true)
+        ))
+        #expect(LinkedDevicePresentation.status(pending) != LinkedDevicePresentation.status(
+            linkedDevice(slot: hex("a"), status: .inactive)
+        ))
+    }
+
     @Test func thisDeviceAndOnesAlreadyLeavingCantBeRemoved() {
         #expect(LinkedDevicePresentation.canRemove(linkedDevice(slot: hex("a"))))
         #expect(!LinkedDevicePresentation.canRemove(linkedDevice(slot: hex("a"), isThisDevice: true)))
@@ -177,6 +188,15 @@ struct DeviceLinkPresentationTests {
     }
 
     // MARK: Sign-ins
+
+    @Test func onlySignInsAnsweredByAnotherDeviceCanBeDismissedAsResolved() {
+        for state: UnrecognizedSignInStateFfi in [.linkedElsewhere, .rejectedElsewhere] {
+            #expect(UnrecognizedSignInPresentation.answeredElsewhere(unrecognizedSignIn(slot: hex("a"), state: state)))
+        }
+        for state: UnrecognizedSignInStateFfi in [.prompt, .notNow] {
+            #expect(!UnrecognizedSignInPresentation.answeredElsewhere(unrecognizedSignIn(slot: hex("a"), state: state)))
+        }
+    }
 
     @Test func startFreshAppliesOnlyToAnUnlinkedDeviceWithEarlierSignIns() {
         let earlier = [unrecognizedSignIn(slot: hex("a"), beforeThisDevice: true)]
