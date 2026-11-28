@@ -38,7 +38,7 @@ nonisolated struct VoiceRecordingMicrophone: Sendable {
             guard recorder.record(forDuration: VoiceRecordingLimit.maxDurationSeconds) else {
                 throw VoiceMessageRecorder.Failure.startFailed
             }
-            let elapsed = {
+            let elapsed: @MainActor @Sendable () -> TimeInterval = {
                 completion.finished ? VoiceRecordingLimit.maxDurationSeconds : recorder.currentTime
             }
             return VoiceRecordingTake(
