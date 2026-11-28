@@ -1,6 +1,19 @@
 import Foundation
 import SwiftUI
 
+/// The MDK key reads behind the Identity screen's backup actions.
+nonisolated struct IdentityKeyCalls: Sendable {
+    var revealNsec: @MainActor (AppState, _ accountRef: String) async throws -> String
+    var exportEncryptedSecretKey: @MainActor (AppState, _ accountRef: String, _ passphrase: String) async throws -> String
+
+    static let live = IdentityKeyCalls(
+        revealNsec: { appState, accountRef in try await appState.revealNsec(accountRef: accountRef) },
+        exportEncryptedSecretKey: { appState, accountRef, passphrase in
+            try await appState.exportEncryptedSecretKey(accountRef: accountRef, passphrase: passphrase)
+        }
+    )
+}
+
 /// Transient presentation state for key access through the existing audited APIs.
 @MainActor
 @Observable
@@ -61,6 +74,11 @@ final class IdentityViewModel {
     var privateKeyCopied = false
     var exportError: String?
     private var presentationID = UUID()
+    @ObservationIgnored private let keys: IdentityKeyCalls
+
+    init(keys: IdentityKeyCalls = .live) {
+        self.keys = keys
+    }
 
     /// Captures the account and presentation for consent without accessing its secret.
     func requestRawKey(_ action: RawKeyAction, using appState: AppState) {
@@ -85,7 +103,7 @@ final class IdentityViewModel {
         }
 
         do {
-            let nsec = try await appState.revealNsec(accountRef: request.accountRef)
+            let nsec = try await keys.revealNsec(appState, request.accountRef)
             guard presentationID == requestID,
                   appState.activeAccountRef == request.accountRef else { return }
             switch request.action {
@@ -124,10 +142,7 @@ final class IdentityViewModel {
         }
 
         do {
-            let ncryptsec = try await appState.exportEncryptedSecretKey(
-                accountRef: accountRef,
-                passphrase: passphrase
-            )
+            let ncryptsec = try await keys.exportEncryptedSecretKey(appState, accountRef, passphrase)
             guard presentationID == requestID,
                   appState.activeAccountRef == accountRef else { return }
             pendingEncryptedShareText = ncryptsec

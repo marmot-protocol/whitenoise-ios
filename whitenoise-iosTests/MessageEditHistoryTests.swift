@@ -171,3 +171,91 @@ struct ConversationEditRecordsSourcingTests {
         )
     }
 }
+
+/// Prepared conversations page accepted versions from MDK newest first.
+@MainActor
+struct EditHistoryVersionsTests {
+    private let first = TimelineEditVersionFfi(messageIdHex: hex("21"), editedAt: 100, plaintext: "first")
+    private let second = TimelineEditVersionFfi(messageIdHex: hex("22"), editedAt: 200, plaintext: "second")
+    private let third = TimelineEditVersionFfi(messageIdHex: hex("23"), editedAt: 300, plaintext: "third\nline")
+
+    @Test func pagesListNewestFirstAndNumberDownFromTheEditCount() async {
+        // MDK returns each page oldest first; a later page may repeat the boundary version.
+        let pages = EditPagesStub([
+            .success(TimelineEditHistoryPageFfi(versions: [second, third], hasMoreBefore: true)),
+            .success(TimelineEditHistoryPageFfi(versions: [first, second], hasMoreBefore: false)),
+        ])
+        let versions = EditHistoryVersions(editCount: 3, loadPage: pages.load)
+
+        await versions.loadNextPage()
+        #expect(versions.rows.map(\.id) == [third.messageIdHex, second.messageIdHex])
+        #expect(versions.hasMore)
+
+        await versions.loadNextPage()
+        #expect(pages.cursors == [nil, second.messageIdHex])
+        #expect(versions.rows.map(\.id) == [third.messageIdHex, second.messageIdHex, first.messageIdHex])
+        #expect(versions.rows.map(\.versionNumber) == [3, 2, 1])
+        #expect(versions.rows.map(\.isCurrent) == [true, false, false])
+        #expect(versions.rows.first?.body == "third line")
+        #expect(!versions.hasMore)
+    }
+
+    @Test func aFailedPageKeepsLoadedVersionsAndRetriesFromTheSameCursor() async {
+        let pages = EditPagesStub([
+            .success(TimelineEditHistoryPageFfi(versions: [second, third], hasMoreBefore: true)),
+            .failure(EditPageError.failed),
+            .success(TimelineEditHistoryPageFfi(versions: [first], hasMoreBefore: false)),
+        ])
+        let versions = EditHistoryVersions(editCount: 3, loadPage: pages.load)
+
+        await versions.loadNextPage()
+        await versions.loadNextPage()
+        #expect(versions.failed)
+        #expect(versions.rows.count == 2)
+
+        await versions.loadNextPage()
+        #expect(!versions.failed)
+        #expect(pages.cursors == [nil, second.messageIdHex, second.messageIdHex])
+        #expect(versions.rows.map(\.versionNumber) == [3, 2, 1])
+    }
+
+    /// A sheet that closes cancels its load: the late page and its error are dropped.
+    @Test func aPageArrivingAfterCancellationIsDropped() async {
+        let pages = EditPagesStub([.success(TimelineEditHistoryPageFfi(versions: [third], hasMoreBefore: true))])
+        let gate = AsyncTestCheckpoint()
+        pages.gate = gate
+        let versions = EditHistoryVersions(editCount: 1, loadPage: pages.load)
+
+        let loading = Task { await versions.loadNextPage() }
+        await gate.waitUntilPaused()
+        await versions.loadNextPage()
+        #expect(pages.cursors.count == 1)
+        loading.cancel()
+        await gate.release()
+        await loading.value
+
+        #expect(versions.rows.isEmpty)
+        #expect(!versions.failed)
+        #expect(!versions.isLoading)
+    }
+}
+
+private enum EditPageError: Error { case failed }
+
+/// Serves edit-history pages in order, recording the cursor each read passed.
+@MainActor
+private final class EditPagesStub {
+    var gate: AsyncTestCheckpoint?
+    private(set) var cursors: [String?] = []
+    private var pages: [Result<TimelineEditHistoryPageFfi, Error>]
+
+    init(_ pages: [Result<TimelineEditHistoryPageFfi, Error>]) {
+        self.pages = pages
+    }
+
+    func load(_ before: TimelineEditVersionFfi?) async throws -> TimelineEditHistoryPageFfi {
+        cursors.append(before?.messageIdHex)
+        await gate?.pause()
+        return try pages.removeFirst().get()
+    }
+}

@@ -83,6 +83,32 @@ nonisolated enum GroupMembershipPageLoader {
     }
 }
 
+/// The MDK reads the directory projects people from, bound to one runtime.
+nonisolated struct RecipientDirectoryReads: Sendable {
+    var chatList: @Sendable (_ accountRef: String) async throws -> [ChatListRowFfi]
+    var memberIdsPage: @Sendable (_ accountRef: String, _ groupIdsHex: [String]) async throws -> [AppGroupMemberIdsFfi]
+    var memberIds: @Sendable (_ accountRef: String, _ groupIdHex: String) async throws -> [String]
+    var adminIds: @Sendable (_ accountRef: String, _ groupIdHex: String) async throws -> [String]
+
+    @MainActor
+    static func live(_ appState: AppState) throws -> RecipientDirectoryReads {
+        let client = try appState.currentMarmotClient()
+        return RecipientDirectoryReads(
+            chatList: { accountRef in try await client.chatList(accountRef: accountRef, includeArchived: true) },
+            memberIdsPage: { accountRef, groupIdsHex in
+                try await client.groupMemberIdsPage(accountRef: accountRef, groupIdsHex: groupIdsHex)
+            },
+            memberIds: { accountRef, groupIdHex in
+                try await client.groupMembers(accountRef: accountRef, groupIdHex: groupIdHex).map(\.memberIdHex)
+            },
+            adminIds: { accountRef, groupIdHex in
+                try await client.groupRoster(accountRef: accountRef, groupIdHex: groupIdHex)
+                    .members.filter(\.isAdmin).map(\.memberIdHex)
+            }
+        )
+    }
+}
+
 /// Screen-lifetime directory of people derivable from the active account's
 /// chat state. Loads the durable chat-list rows plus each group's roster off
 /// the MainActor, then projects candidates ordered by recent conversation
@@ -110,8 +136,13 @@ final class RecipientDirectory {
     private var loadTask: Task<Void, Never>?
     private var loadTaskID: UUID?
     private var loadAccountRef: String?
+    @ObservationIgnored private let makeReads: @MainActor (AppState) throws -> RecipientDirectoryReads
 
     private static let profileWarmupLimit = 24
+
+    init(reads: @escaping @MainActor (AppState) throws -> RecipientDirectoryReads = RecipientDirectoryReads.live) {
+        makeReads = reads
+    }
 
     /// Callers that need the directory before deciding (e.g. DM reuse) can
     /// await this mid-flight: a concurrent load is joined, not skipped.
@@ -216,10 +247,10 @@ final class RecipientDirectory {
             }
         }
         do {
-            let client = try appState.currentMarmotClient()
+            let reads = try makeReads(appState)
             let myAccountIdHex = appState.activeAccount?.accountIdHex
             let loaded = try await Self.loadSnapshots(
-                client: client,
+                reads: reads,
                 accountRef: accountRef,
                 includeAdminMetadata: includeAdminMetadata
             )
@@ -296,32 +327,22 @@ final class RecipientDirectory {
     /// command. A failed page falls back per group so one bad row still cannot
     /// blank the directory.
     private nonisolated static func loadSnapshots(
-        client: MarmotClient,
+        reads: RecipientDirectoryReads,
         accountRef: String,
         includeAdminMetadata: Bool
     ) async throws -> [RecipientGroupSnapshot] {
         let startedAt = ContinuousClock.now
-        let rows = try await client.chatList(accountRef: accountRef, includeArchived: true)
+        let rows = try await reads.chatList(accountRef)
         let membership = try await GroupMembershipPageLoader.load(
             groupIdsHex: rows.map(\.groupIdHex),
-            pageRead: { groupIdsHex in
-                try await client.groupMemberIdsPage(
-                    accountRef: accountRef,
-                    groupIdsHex: groupIdsHex
-                )
-            },
-            fallbackRead: { groupIdHex in
-                try await client.groupMembers(
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex
-                ).map(\.memberIdHex)
-            }
+            pageRead: { groupIdsHex in try await reads.memberIdsPage(accountRef, groupIdsHex) },
+            fallbackRead: { groupIdHex in try await reads.memberIds(accountRef, groupIdHex) }
         )
         var adminIdsByGroupId = membership.adminIdsByGroupId
         if includeAdminMetadata {
             let fallbackRows = rows.filter { adminIdsByGroupId[$0.groupIdHex] == nil }
             let fallbackAdmins = try await loadAdminIds(
-                client: client,
+                reads: reads,
                 accountRef: accountRef,
                 rows: fallbackRows
             )
@@ -346,7 +367,7 @@ final class RecipientDirectory {
     }
 
     private nonisolated static func loadAdminIds(
-        client: MarmotClient,
+        reads: RecipientDirectoryReads,
         accountRef: String,
         rows: [ChatListRowFfi]
     ) async throws -> [String: [String]] {
@@ -362,14 +383,7 @@ final class RecipientDirectory {
                 guard let row = iterator.next() else { return }
                 inFlight += 1
                 group.addTask {
-                    let roster = try? await client.groupRoster(
-                        accountRef: accountRef,
-                        groupIdHex: row.groupIdHex
-                    )
-                    return (
-                        row.groupIdHex,
-                        roster?.members.filter(\.isAdmin).map(\.memberIdHex)
-                    )
+                    (row.groupIdHex, try? await reads.adminIds(accountRef, row.groupIdHex))
                 }
             }
             for _ in 0..<4 { addNext() }

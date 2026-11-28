@@ -1,6 +1,57 @@
 import Foundation
 import MarmotKit
 
+/// MDK's attachment-storage calls on one runtime.
+nonisolated struct ManageStorageCalls: Sendable {
+    var usage: @MainActor (_ accountRef: String) async throws -> AttachmentStorageUsageFfi
+    var keepMedia: @MainActor (_ accountRef: String) async throws -> AttachmentKeepMediaFfi
+    var chats: @MainActor (_ accountRef: String, _ limit: UInt32, _ cursor: ChatStorageCursor?)
+        async throws -> ChatStoragePageFfi
+    var attachments: @MainActor (_ accountRef: String, _ groupIdHex: String?, _ limit: UInt32,
+                                 _ cursor: RetainedAttachmentsCursor?) async throws -> RetainedAttachmentsPageFfi
+    var presentedRow: @MainActor (_ accountRef: String, _ groupIdHex: String) async throws -> PresentedChatRowFfi?
+    var openPresentedRows: @MainActor (_ accountRef: String) async throws -> PresentedChatListSubscription
+    var presentedRowsSnapshot: @MainActor (PresentedChatListSubscription) async -> PresentedChatListUpdateFfi?
+    var clearAvatarCache: @MainActor (_ accountRef: String) async throws -> Void
+    var removeOlder: @MainActor (_ accountRef: String, _ receivedBefore: UInt64, _ groupIdHex: String?)
+        async throws -> UInt64
+    var setKeepMedia: @MainActor (_ accountRef: String, _ keep: AttachmentKeepMediaFfi) async throws -> UInt64
+    var removeChat: @MainActor (_ accountRef: String, _ groupIdHex: String) async throws -> UInt64
+    var removeAttachment: @MainActor (_ accountRef: String, _ groupIdHex: String, _ target: AttachmentLocalTargetFfi)
+        async throws -> Bool
+    var plaintextHash: @MainActor (_ accountRef: String, _ groupIdHex: String, _ target: AttachmentLocalTargetFfi)
+        async throws -> String?
+
+    static func live(_ client: MarmotClient) -> ManageStorageCalls {
+        ManageStorageCalls(
+            usage: { try await client.attachmentStorageUsage(accountRef: $0) },
+            keepMedia: { try await client.attachmentKeepMedia(accountRef: $0) },
+            chats: { try await client.attachmentStorageByChat(accountRef: $0, limit: $1, cursor: $2) },
+            attachments: {
+                try await client.largestRetainedAttachments(accountRef: $0, groupIdHex: $1, limit: $2, cursor: $3)
+            },
+            presentedRow: { try await client.presentedChatListRow(accountRef: $0, groupIdHex: $1) },
+            openPresentedRows: { try await client.openPresentedChatList(accountRef: $0, includeArchived: true) },
+            presentedRowsSnapshot: { await client.presentedChatListSubscriptionSnapshot($0) },
+            clearAvatarCache: { accountRef in
+                // Drop decoded pictures and hold off new avatar demand while MDK clears the stored ones.
+                AvatarCacheErasure.begin()
+                defer { AvatarCacheErasure.end() }
+                try await client.clearAvatarCache(accountRef: accountRef)
+            },
+            removeOlder: {
+                try await client.removeAttachmentsOlderThan(accountRef: $0, receivedBefore: $1, groupIdHex: $2)
+            },
+            setKeepMedia: { try await client.setAttachmentKeepMedia(accountRef: $0, keep: $1) },
+            removeChat: { try await client.removeChatAttachments(accountRef: $0, groupIdHex: $1) },
+            removeAttachment: { try await client.removeRetainedAttachment(accountRef: $0, groupIdHex: $1, target: $2) },
+            plaintextHash: {
+                try await client.retainedAttachmentPlaintextHash(accountRef: $0, groupIdHex: $1, target: $2)
+            }
+        )
+    }
+}
+
 /// One profile's Manage Storage state. Every read is bound to the account and
 /// runtime it started on, and any removal starts every listing over.
 @MainActor
@@ -50,10 +101,66 @@ final class ManageStorageModel {
     typealias ChatPages = StoragePageList<ChatAttachmentUsageFfi, ChatStorageCursor>
     typealias AttachmentPages = StoragePageList<RetainedAttachmentSummaryFfi, RetainedAttachmentsCursor>
 
+    /// The active profile's live runtime, while local foreground work may use it.
+    struct Runtime {
+        let accountRef: String
+        let generation: Int
+        let id: ObjectIdentifier
+        let calls: ManageStorageCalls
+    }
+
+    /// One change's lease on the live runtime; suspension waits until `end`.
+    struct Change {
+        let runtimeID: ObjectIdentifier
+        let calls: ManageStorageCalls
+        let end: @MainActor () -> Void
+    }
+
+    struct Dependencies {
+        var runtime: @MainActor (AppState) -> Runtime?
+        var beginChange: @MainActor (AppState) throws -> Change
+        /// Drops one removed file's decrypted copy (nil when MDK can't name it).
+        var dropDecryptedCopy: @MainActor (_ plaintextHash: String?) async -> Void
+        /// Drops every decrypted copy, for removals that can't name what they removed.
+        var dropAllDecryptedMedia: @MainActor () async -> Void
+
+        static let live = Dependencies(
+            runtime: { appState in
+                guard let accountRef = appState.activeAccountRef, appState.canUseRuntimeForLocalForegroundWork,
+                      let client = appState.client else { return nil }
+                return Runtime(accountRef: accountRef, generation: appState.runtimeGeneration,
+                               id: ObjectIdentifier(client), calls: .live(client))
+            },
+            beginChange: { appState in
+                let lifecycle = appState.runtimeLifecycle
+                let lease = try lifecycle.beginForegroundRuntimeMutation()
+                return Change(runtimeID: ObjectIdentifier(lease.client), calls: .live(lease.client),
+                              end: { lifecycle.endForegroundRuntimeMutation(lease) })
+            },
+            dropDecryptedCopy: { plaintextHash in
+                if let plaintextHash {
+                    _ = await MessageMediaCache.removeCachedData(forPlaintextHashes: [plaintextHash])
+                }
+                AttachmentPresentationState.shared.invalidate()
+            },
+            dropAllDecryptedMedia: {
+                // Open conversations then re-read through MDK.
+                _ = await MessageMediaCache.purgeAllDecryptedMedia()
+                AttachmentPresentationState.shared.invalidate()
+            }
+        )
+    }
+
     private struct Context: Equatable {
         let accountRef: String
         let runtimeGeneration: Int
-        let client: ObjectIdentifier
+        let runtime: ObjectIdentifier
+
+        init(_ runtime: Runtime) {
+            accountRef = runtime.accountRef
+            runtimeGeneration = runtime.generation
+            self.runtime = runtime.id
+        }
     }
 
     private(set) var usageRefresh = ManageStoragePresentation.UsageRefresh()
@@ -74,9 +181,14 @@ final class ManageStorageModel {
     private var identities: [String: ChatIdentity] = [:]
 
     @ObservationIgnored private var context: Context?
+    @ObservationIgnored private let dependencies: Dependencies
     #if DEBUG
     @ObservationIgnored private var isFixture = false
     #endif
+
+    init(dependencies: Dependencies = .live) {
+        self.dependencies = dependencies
+    }
 
     var usage: ManageStoragePresentation.Usage? { usageRefresh.usage }
     var keepMedia: AttachmentKeepMediaFfi? { keepMediaRefresh.keep }
@@ -119,10 +231,10 @@ final class ManageStorageModel {
     }
 
     func refreshKeepMedia(using appState: AppState) async {
-        guard let context, let client = client(for: context, appState) else { return }
+        guard let context, let calls = calls(for: context, appState) else { return }
         let epoch = epoch
         do {
-            let value = try await client.attachmentKeepMedia(accountRef: context.accountRef)
+            let value = try await calls.keepMedia(context.accountRef)
             guard isCurrent(context, epoch: epoch, appState) else { return }
             keepMediaRefresh.succeeded(value)
         } catch {
@@ -132,10 +244,10 @@ final class ManageStorageModel {
     }
 
     func refreshUsage(using appState: AppState) async {
-        guard let context, let client = client(for: context, appState) else { return }
+        guard let context, let calls = calls(for: context, appState) else { return }
         let epoch = epoch
         do {
-            let value = try await client.attachmentStorageUsage(accountRef: context.accountRef)
+            let value = try await calls.usage(context.accountRef)
             guard isCurrent(context, epoch: epoch, appState) else { return }
             usageRefresh.succeeded(ManageStoragePresentation.Usage(value))
         } catch {
@@ -147,13 +259,12 @@ final class ManageStorageModel {
     /// Follows the profile's presented chat list so listed chats pick up avatars
     /// once MDK acquires them, and renamed chats or nicknames. Runs until cancelled.
     func followPresentedRows(using appState: AppState) async {
-        guard let context, let client = client(for: context, appState) else { return }
+        guard let context, let calls = calls(for: context, appState) else { return }
         var retryDelay = Duration.milliseconds(500)
         while !Task.isCancelled, currentContext(appState) == context {
             do {
-                let subscription = try await client.openPresentedChatList(accountRef: context.accountRef,
-                                                                          includeArchived: true)
-                guard let initial = await client.presentedChatListSubscriptionSnapshot(subscription) else {
+                let subscription = try await calls.openPresentedRows(context.accountRef)
+                guard let initial = await calls.presentedRowsSnapshot(subscription) else {
                     throw CancellationError()
                 }
                 guard !Task.isCancelled, currentContext(appState) == context else { return }
@@ -197,15 +308,14 @@ final class ManageStorageModel {
     }
 
     func loadMoreChats(using appState: AppState) async {
-        guard !isLoadingChats, chats.hasMore, let context, let client = client(for: context, appState) else { return }
+        guard !isLoadingChats, chats.hasMore, let context, let calls = calls(for: context, appState) else { return }
         let epoch = epoch
         isLoadingChats = true
         defer { if self.epoch == epoch { isLoadingChats = false } }
         do {
-            let page = try await client.attachmentStorageByChat(accountRef: context.accountRef,
-                limit: ManageStoragePresentation.pageLimit, cursor: chats.cursor)
+            let page = try await calls.chats(context.accountRef, ManageStoragePresentation.pageLimit, chats.cursor)
             guard isCurrent(context, epoch: epoch, appState) else { return }
-            await resolveIdentities(page.chats.map(\.groupIdHex), client: client, context: context, appState)
+            await resolveIdentities(page.chats.map(\.groupIdHex), calls: calls, context: context, appState)
             guard isCurrent(context, epoch: epoch, appState) else { return }
             chats.append(page.chats, next: page.nextCursor)
             chatsFailed = false
@@ -218,16 +328,16 @@ final class ManageStorageModel {
     func loadMoreAttachments(_ scope: Scope, using appState: AppState) async {
         let pages = attachmentPages(scope)
         guard !loadingAttachments.contains(scope), pages.hasMore, let context,
-              let client = client(for: context, appState) else { return }
+              let calls = calls(for: context, appState) else { return }
         let epoch = epoch
         loadingAttachments.insert(scope)
         defer { if self.epoch == epoch { loadingAttachments.remove(scope) } }
         do {
-            let page = try await client.largestRetainedAttachments(accountRef: context.accountRef,
-                groupIdHex: scope.groupIdHex, limit: ManageStoragePresentation.pageLimit, cursor: pages.cursor)
+            let page = try await calls.attachments(context.accountRef, scope.groupIdHex,
+                                                   ManageStoragePresentation.pageLimit, pages.cursor)
             guard isCurrent(context, epoch: epoch, appState) else { return }
             if scope == .account {
-                await resolveIdentities(page.attachments.map(\.groupIdHex), client: client, context: context, appState)
+                await resolveIdentities(page.attachments.map(\.groupIdHex), calls: calls, context: context, appState)
                 guard isCurrent(context, epoch: epoch, appState) else { return }
             }
             var updated = attachmentPages(scope)
@@ -241,11 +351,8 @@ final class ManageStorageModel {
     }
 
     func clearCache(using appState: AppState) async {
-        await perform(.clearCache, using: appState) { client, accountRef in
-            // Drop decoded pictures and hold off new avatar demand while MDK clears the stored ones.
-            AvatarCacheErasure.begin()
-            defer { AvatarCacheErasure.end() }
-            try await client.clearAvatarCache(accountRef: accountRef)
+        await perform(.clearCache, using: appState) { calls, accountRef in
+            try await calls.clearAvatarCache(accountRef)
             return nil
         }
     }
@@ -254,9 +361,8 @@ final class ManageStorageModel {
     func removeOlder(than cutoff: ManageStoragePresentation.RemovalCutoff, in scope: Scope,
                      using appState: AppState) async {
         let receivedBefore = cutoff.receivedBefore
-        await perform(.removeOlder(scope), using: appState) { client, accountRef in
-            try await client.removeAttachmentsOlderThan(accountRef: accountRef,
-                receivedBefore: receivedBefore, groupIdHex: scope.groupIdHex)
+        await perform(.removeOlder(scope), using: appState) { calls, accountRef in
+            try await calls.removeOlder(accountRef, receivedBefore, scope.groupIdHex)
         }
     }
 
@@ -265,7 +371,7 @@ final class ManageStorageModel {
     func setKeepMedia(_ keep: AttachmentKeepMediaFfi, using appState: AppState) async -> UInt64? {
         let started = context
         var removed: UInt64?
-        await perform(.keepMedia, using: appState) { client, accountRef in
+        await perform(.keepMedia, using: appState) { calls, accountRef in
             // Recorded before the re-read, which may fail and would otherwise leave the old window.
             var saved = false
             defer {
@@ -273,7 +379,7 @@ final class ManageStorageModel {
                     keepMediaRefresh.changed(to: keep, saved: saved)
                 }
             }
-            removed = try await client.setAttachmentKeepMedia(accountRef: accountRef, keep: keep)
+            removed = try await calls.setKeepMedia(accountRef, keep)
             saved = true
             return removed
         }
@@ -282,32 +388,28 @@ final class ManageStorageModel {
     }
 
     func removeAllAttachments(inChat groupIdHex: String, using appState: AppState) async {
-        await perform(.removeChat(groupIdHex), using: appState) { client, accountRef in
-            try await client.removeChatAttachments(accountRef: accountRef, groupIdHex: groupIdHex)
+        await perform(.removeChat(groupIdHex), using: appState) { calls, accountRef in
+            try await calls.removeChat(accountRef, groupIdHex)
         }
     }
 
     /// An entry that no longer reads locally is already gone, and starting over drops its row.
     func remove(_ attachment: RetainedAttachmentSummaryFfi, using appState: AppState) async {
         let id = ManageStoragePresentation.attachmentID(attachment)
-        await perform(.removeAttachment(id), using: appState) { client, accountRef in
-            guard try await client.removeRetainedAttachment(accountRef: accountRef,
-                groupIdHex: attachment.groupIdHex, target: attachment.target)
+        await perform(.removeAttachment(id), using: appState) { calls, accountRef in
+            guard try await calls.removeAttachment(accountRef, attachment.groupIdHex, attachment.target)
             else { throw AttachmentReadError.stale }
             // Like Downloads, drop only this file's decrypted copy. A copy that can't be
             // named or deleted stays a miss: never wipe every profile's media for one row.
-            if let hash = try await client.retainedAttachmentPlaintextHash(accountRef: accountRef,
-                groupIdHex: attachment.groupIdHex, target: attachment.target) {
-                _ = await MessageMediaCache.removeCachedData(forPlaintextHashes: [hash])
-            }
-            AttachmentPresentationState.shared.invalidate()
+            let hash = try await calls.plaintextHash(accountRef, attachment.groupIdHex, attachment.target)
+            await dependencies.dropDecryptedCopy(hash)
             return nil
         }
     }
 
     /// `body` returns how many attachments MDK removed, when it reports a count.
     private func perform(_ operation: Operation, using appState: AppState,
-                         _ body: (MarmotClient, String) async throws -> UInt64?) async {
+                         _ body: (ManageStorageCalls, String) async throws -> UInt64?) async {
         guard self.operation == nil, let context, currentContext(appState) == context else { return }
         self.operation = operation
         failedOperation = nil
@@ -315,28 +417,21 @@ final class ManageStorageModel {
         var attempted = false
         var removed: UInt64?
         do {
-            let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
-            defer { appState.runtimeLifecycle.endForegroundRuntimeMutation(lease) }
-            guard isCurrent(context, epoch: epoch, appState), lease.client === appState.client else {
+            let change = try dependencies.beginChange(appState)
+            defer { change.end() }
+            guard isCurrent(context, epoch: epoch, appState), change.runtimeID == context.runtime else {
                 throw CancellationError()
             }
             attempted = true
-            removed = try await body(lease.client, context.accountRef)
+            removed = try await body(change.calls, context.accountRef)
         } catch {
             if currentContext(appState) == context { failedOperation = operation }
         }
         if attempted, operation.dropsEveryDecryptedCopy(removed: removed) {
-            await Self.purgeAllDecryptedMedia()
+            await dependencies.dropAllDecryptedMedia()
         }
         guard currentContext(appState) == context else { return }
         await bind(using: appState)
-    }
-
-    /// Drops every decrypted copy, for removals that can't name what they removed;
-    /// open conversations then re-read through MDK.
-    private static func purgeAllDecryptedMedia() async {
-        _ = await MessageMediaCache.purgeAllDecryptedMedia()
-        AttachmentPresentationState.shared.invalidate()
     }
 
     private func reset() {
@@ -350,11 +445,11 @@ final class ManageStorageModel {
         loadingAttachments = []
     }
 
-    private func resolveIdentities(_ groupIds: [String], client: MarmotClient, context: Context,
+    private func resolveIdentities(_ groupIds: [String], calls: ManageStorageCalls, context: Context,
                                    _ appState: AppState) async {
         for groupIdHex in Set(groupIds) where identities[groupIdHex] == nil {
             do {
-                let row = try await client.presentedChatListRow(accountRef: context.accountRef, groupIdHex: groupIdHex)
+                let row = try await calls.presentedRow(context.accountRef, groupIdHex)
                 guard currentContext(appState) == context else { return }
                 identities[groupIdHex] = row.map { identity(for: $0, appState) }
                     ?? identity(for: groupIdHex)
@@ -376,15 +471,12 @@ final class ManageStorageModel {
     }
 
     private func currentContext(_ appState: AppState) -> Context? {
-        guard let accountRef = appState.activeAccountRef, appState.canUseRuntimeForLocalForegroundWork,
-              let client = appState.client else { return nil }
-        return Context(accountRef: accountRef, runtimeGeneration: appState.runtimeGeneration,
-                       client: ObjectIdentifier(client))
+        dependencies.runtime(appState).map(Context.init)
     }
 
-    private func client(for context: Context, _ appState: AppState) -> MarmotClient? {
-        guard currentContext(appState) == context else { return nil }
-        return appState.client
+    private func calls(for context: Context, _ appState: AppState) -> ManageStorageCalls? {
+        guard let runtime = dependencies.runtime(appState), Context(runtime) == context else { return nil }
+        return runtime.calls
     }
 
     private func isCurrent(_ context: Context, epoch: Int, _ appState: AppState) -> Bool {

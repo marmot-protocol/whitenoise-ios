@@ -91,62 +91,39 @@ nonisolated enum EditHistoryPresentation {
     }
 }
 
-struct EditHistorySheet: View {
-    @Environment(\.dismiss) private var dismiss
+/// Accepted versions MDK pages newest first; each later page is older.
+@MainActor
+@Observable
+final class EditHistoryVersions {
+    // Avoid the isolated-deinit task-local crash on older Swift runtimes (including iOS 26.2).
+    // https://github.com/swiftlang/swift/issues/88036
+    nonisolated deinit {}
 
-    let rows: [EditHistoryPresentation.Row]
-    var editCount: UInt64 = 0
-    var loadPage: ((TimelineEditVersionFfi?) async throws -> TimelineEditHistoryPageFfi)?
-    @State private var loadedRows: [EditHistoryPresentation.Row] = []
-    @State private var cursor: TimelineEditVersionFfi?
-    @State private var hasMore = false
-    @State private var isLoading = false
-    @State private var failed = false
-    @State private var loadTask: Task<Void, Never>?
+    typealias LoadPage = (TimelineEditVersionFfi?) async throws -> TimelineEditHistoryPageFfi
 
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(loadPage == nil ? rows : loadedRows) { row in
-                    versionCard(row)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        .listRowSeparator(.hidden)
-                }
-                if isLoading { ProgressView() }
-                if failed || hasMore {
-                    Button(failed ? L10n.string("Retry") : L10n.string("Load more")) {
-                        loadTask = Task { await loadNextPage() }
-                    }
-                    .disabled(isLoading)
-                }
-            }
-            .task { if loadPage != nil { await loadNextPage() } }
-            .onDisappear { loadTask?.cancel() }
-            .listStyle(.plain)
-            .navigationTitle("Edit history")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+    private(set) var rows: [EditHistoryPresentation.Row] = []
+    private(set) var hasMore = false
+    private(set) var isLoading = false
+    private(set) var failed = false
+    @ObservationIgnored private var cursor: TimelineEditVersionFfi?
+    @ObservationIgnored private let editCount: UInt64
+    @ObservationIgnored private let loadPage: LoadPage
+
+    init(editCount: UInt64, loadPage: @escaping LoadPage) {
+        self.editCount = editCount
+        self.loadPage = loadPage
     }
 
-    @MainActor
-    private func loadNextPage() async {
-        guard let loadPage, !isLoading else { return }
+    func loadNextPage() async {
+        guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
         do {
             let page = try await loadPage(cursor)
             try Task.checkCancellation()
-            let offset = loadedRows.count
-            let known = Set(loadedRows.map(\.id))
-            loadedRows += page.versions.reversed().enumerated().compactMap { index, version in
+            let offset = rows.count
+            let known = Set(rows.map(\.id))
+            rows += page.versions.reversed().enumerated().compactMap { index, version in
                 guard !known.contains(version.messageIdHex) else { return nil }
                 return EditHistoryPresentation.Row(
                     id: version.messageIdHex,
@@ -165,6 +142,54 @@ struct EditHistorySheet: View {
         } catch {
             failed = true
         }
+    }
+}
+
+struct EditHistorySheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let rows: [EditHistoryPresentation.Row]
+    @State private var versions: EditHistoryVersions?
+    @State private var loadTask: Task<Void, Never>?
+
+    init(rows: [EditHistoryPresentation.Row], editCount: UInt64 = 0,
+         loadPage: EditHistoryVersions.LoadPage? = nil) {
+        self.rows = rows
+        _versions = State(initialValue: loadPage.map { EditHistoryVersions(editCount: editCount, loadPage: $0) })
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(versions?.rows ?? rows) { row in
+                    versionCard(row)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowSeparator(.hidden)
+                }
+                if let versions {
+                    if versions.isLoading { ProgressView() }
+                    if versions.failed || versions.hasMore {
+                        Button(versions.failed ? L10n.string("Retry") : L10n.string("Load more")) {
+                            loadTask = Task { await versions.loadNextPage() }
+                        }
+                        .disabled(versions.isLoading)
+                    }
+                }
+            }
+            .task { await versions?.loadNextPage() }
+            .onDisappear { loadTask?.cancel() }
+            .listStyle(.plain)
+            .navigationTitle("Edit history")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     private func versionCard(_ row: EditHistoryPresentation.Row) -> some View {
