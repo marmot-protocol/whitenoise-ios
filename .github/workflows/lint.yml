@@ -3,14 +3,14 @@ name: Lint
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [master, develop]
 
 permissions:
   contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.ref != 'refs/heads/develop' }}
 
 jobs:
   # Every pull request runs this workflow so the required "Lint result"
@@ -51,6 +51,24 @@ jobs:
           done <<< "$files"
           echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
 
+  # Runs unconditionally on every PR and push so master can never take a
+  # pre-release MarmotKit pin, even if no Swift files changed.
+  marmotkit-channel:
+    name: MarmotKit release channel
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check MarmotKit release channel
+        run: scripts/ci/check-marmotkit-channel.sh
+
   swiftlint:
     name: SwiftLint (Airbnb config, --strict)
     needs: changes
@@ -60,7 +78,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -88,12 +106,13 @@ jobs:
           CI: true
         run: ./scripts/lint.sh
 
-  # The ruleset requires this check. It passes only when the job passed, or was
-  # skipped because no input changed; a failed, cancelled or missing filter fails it.
+  # The ruleset requires this check. It passes only when the channel check
+  # passed AND swiftlint passed (or was skipped because no input changed); a
+  # failed, cancelled or missing filter fails it.
   result:
     name: Lint result
     if: always()
-    needs: [changes, swiftlint]
+    needs: [changes, marmotkit-channel, swiftlint]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
@@ -102,8 +121,10 @@ jobs:
         env:
           CHANGES: ${{ needs.changes.result }}
           RELEVANT: ${{ needs.changes.outputs.relevant }}
+          CHANNEL: ${{ needs.marmotkit-channel.result }}
           JOB: ${{ needs.swiftlint.result }}
         run: |
-          echo "changes=$CHANGES relevant=$RELEVANT swiftlint=$JOB"
+          echo "changes=$CHANGES relevant=$RELEVANT channel=$CHANNEL swiftlint=$JOB"
           [ "$CHANGES" = success ] || exit 1
+          [ "$CHANNEL" = success ] || exit 1
           [ "$JOB" = success ] || { [ "$RELEVANT" = false ] && [ "$JOB" = skipped ]; }

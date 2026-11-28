@@ -1,17 +1,25 @@
-mdk-sha: 3fce95465cdea1edc8456dbd1c6691d1c8dc1f2e
-mdk-branch: master
-mdk-tag: marmotkit-v0.19.0
-published-at: 2026-11-22T14:20:30Z
+mdk-sha: 07567caf0814fa0f5688c5da83a7209f94c71e03
+mdk-branch: canary
+mdk-tag: marmotkit-v0.20.0-rc.4
+channel: rc
+published-at: 2026-11-28T03:02:06Z
 uniffi-version: 0.29.4
 features: otlp-export,product-analytics-export
 ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim
 ios-deployment-target: 18.0
 rust-release-opt-level: 3
 rust-release-codegen-units: 1
-swiftpm-checksum: 8b33d6041daa74fd6f3b7004e9da177bd987a4873d0753cecd360d7f8f31e0b5
+swiftpm-checksum: d981d2abc6a2484e00db781e4cd43350c30447f18a32da7f080b9f7b2fb4f0aa
+swift-published-sha256: 89d830fcff474797fc6c1c212124dba02315a12f2de62af8fc04ab61ce8c397c
+swift-vendored-sha256: 92ba65601e3355d21548c00f3a9a0e6d7b8fee9c19c7f867922f2c8b9ccadb78
 distribution: static-library-and-privacy-v1
 privacy-sha256: 3759ff2493741386342599b39673989a461f491ad1fb207a7133a2b0035140f7
+rc-date: 2026-11-28
+rc-impact: minor
+rc-baseline-tag: v0.19.0
 
 Notes:
-- Refresh from a published immutable artifact with:
-  whitenoise-ios/scripts/sync-bindings.sh <version-or-full-master-sha>
+- develop pins the latest verified RC: `just sync-rc` (scripts/sync-rc.sh).
+- master pins Stable only: `just promote-stable` swaps the RC for the Stable promoted from it.
+- Any published release: `just sync-bindings <version-or-full-master-sha>`.
+- See docs/release-flow.md.

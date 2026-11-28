@@ -144,10 +144,12 @@ struct UserFacingError: Equatable {
     private nonisolated static func sendMessage(for error: Error) -> String? {
         guard let marmotError = error as? MarmotKitError else { return nil }
         switch marmotError {
-        case .MissingKeyPackage(_, .obsoleteOnly):
+        case .MissingKeyPackage(_, .obsoleteOnly), .IncompatibleKeyPackage:
             return L10n.string("This person's app is out of date. Ask them to update it and open it, then try again.")
         case .MissingKeyPackage:
             return L10n.string("This person has no compatible invitation key available. Ask them to open White Noise and try again.")
+        case .RelayCheckRunning:
+            return L10n.string("A relay check is already running. Wait for it to finish, then try again.")
         case .DirectoryLookupIncomplete:
             return L10n.string("Couldn't finish looking this person up on relays. Check your connection and try again.")
         case .GroupCatchingUp:

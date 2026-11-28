@@ -199,6 +199,7 @@ SHARED_SPELLINGS = frozenset(
 # Invariable plurals: the one form a locale shares with English, so the rest stays checked.
 SHARED_FORMS = {
     **{("%lld emoji", locale): frozenset({"%lld emoji"}) for locale in ("es", "fr", "it", "pt", "tr")},
+    ("%lld files", "it"): frozenset({"%lld file"}),
     ("%lld stickers", "it"): frozenset({"%lld sticker"}),
     ("%lld videos", "fi"): frozenset({"%lld video"}),
     ("%lld videos", "it"): frozenset({"%lld video"}),

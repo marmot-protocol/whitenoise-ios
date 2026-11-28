@@ -716,6 +716,8 @@ extension TimelineMessageRecordFfi {
         media: [MediaAttachmentReferenceFfi],
         thread: TimelineThreadRefFfi? = nil,
         groupSystem: GroupSystemEventFfi?,
+        agentItem: AgentItemFfi? = nil,
+        agentItemFirstEventMissing: Bool = false,
         poll: PollProjectionFfi? = nil,
         reactions: TimelineReactionSummaryFfi,
         edit: TimelineEditSummaryFfi? = nil,
@@ -750,6 +752,8 @@ extension TimelineMessageRecordFfi {
             mediaJson: mediaJson,
             media: media.enumerated().map { .accepted(attachmentIndex: UInt32(clamping: $0.offset), reference: $0.element) },
             groupSystem: groupSystem,
+            agentItem: agentItem,
+            agentItemFirstEventMissing: agentItemFirstEventMissing,
             reactions: reactions,
             edit: edit,
             deleted: deleted,
@@ -779,6 +783,8 @@ extension TimelineMessageRecordFfi {
         media: [MediaAttachmentReferenceFfi] = [],
         thread: TimelineThreadRefFfi? = nil,
         groupSystem: GroupSystemEventFfi? = nil,
+        agentItem: AgentItemFfi? = nil,
+        agentItemFirstEventMissing: Bool = false,
         poll: PollProjectionFfi? = nil,
         reactions: TimelineReactionSummaryFfi,
         edit: TimelineEditSummaryFfi? = nil,
@@ -813,6 +819,8 @@ extension TimelineMessageRecordFfi {
             mediaJson: mediaJson,
             media: media.enumerated().map { .accepted(attachmentIndex: UInt32(clamping: $0.offset), reference: $0.element) },
             groupSystem: groupSystem,
+            agentItem: agentItem,
+            agentItemFirstEventMissing: agentItemFirstEventMissing,
             reactions: reactions,
             edit: edit,
             deleted: deleted,
@@ -836,6 +844,8 @@ extension TimelineReplyPreviewFfi {
         media: [MediaAttachmentReferenceFfi] = [],
         replyToMessageIdHex: String? = nil,
         thread: TimelineThreadRefFfi? = nil,
+        retentionSeconds: UInt64? = nil,
+        retentionExpiresAt: UInt64? = nil,
         deleted: Bool,
         deletionSource: DeletionSourceFfi = .unknown
     ) {
@@ -852,7 +862,9 @@ extension TimelineReplyPreviewFfi {
             deleted: deleted,
             deletionSource: deletionSource,
             invalidationStatus: nil,
-            thread: thread
+            thread: thread,
+            retentionSeconds: retentionSeconds,
+            retentionExpiresAt: retentionExpiresAt
         )
     }
 }

@@ -204,6 +204,11 @@ final class ConversationViewModel {
     /// window, current-match cursor, and the budgeted older-history step.
     @ObservationIgnored let search: ConversationSearchModel
 
+    /// Tracks pending kind-1202 answers/controls until settled by an agent item,
+    /// and resolves who answered settled items.
+    let agentInteractions = AgentInteractionStore()
+    @ObservationIgnored private var agentRequestSenderLoadTask: Task<Void, Never>?
+
     // Timeline surface forwarded from `timelineStore` (observation propagates
     // through these computed reads because `timelineStore` is `@Observable`).
     var timeline: [TimelineItem] { timelineStore.timeline }
@@ -314,6 +319,9 @@ final class ConversationViewModel {
     @ObservationIgnored private let durableRetryOperations: DurableRetryOperations
     @ObservationIgnored private let inviteDeclineCalls: InviteDeclineCalls
     @ObservationIgnored private let groupCalls: ConversationGroupCalls
+    @ObservationIgnored private let agentRequestCalls: AgentRequestCalls
+    @ObservationIgnored private let readMarkerSleep: @Sendable (Duration) async throws -> Void
+    @ObservationIgnored private let readMarkerMarkRead: ConversationReadMarker.MarkReadHandler
     @ObservationIgnored let advisoryPrompter = GroupChangeAdvisoryPrompter()
     /// Sends NIP-30 custom emoji drawn from `customEmojiCatalog`; holds the
     /// uploaded references retries reuse.
@@ -418,7 +426,9 @@ final class ConversationViewModel {
         orderKey: { [weak timelineStore] messageIdHex in
             timelineStore?.historyOrderKey(forMessageIdHex: messageIdHex)
         },
-        onChatListRowUpdated: onChatListRowUpdated
+        onChatListRowUpdated: onChatListRowUpdated,
+        sleep: readMarkerSleep,
+        markRead: readMarkerMarkRead
     )
     /// Cached `@`-mention autocomplete candidates and the generation pair they
     /// were built from. `mentionCandidates(for:)` runs on every composer
@@ -1004,6 +1014,10 @@ final class ConversationViewModel {
         timelineStore.isDeleted(messageIdHex)
     }
 
+    func deletionSource(for messageIdHex: String) -> DeletionSourceFfi {
+        timelineStore.deletedProjections.source(for: messageIdHex)
+    }
+
     func isEdited(_ messageIdHex: String) -> Bool {
         timelineStore.isEdited(messageIdHex)
     }
@@ -1151,7 +1165,10 @@ final class ConversationViewModel {
         timelineTimings: TimelineStoreTimings? = nil,
         composerMarmotCalls: ComposerMarmotCalls = .live,
         inviteDeclineCalls: InviteDeclineCalls = .live,
-        groupCalls: ConversationGroupCalls = .live
+        groupCalls: ConversationGroupCalls = .live,
+        agentRequestCalls: AgentRequestCalls = .live,
+        readMarkerSleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        readMarkerMarkRead: @escaping ConversationReadMarker.MarkReadHandler = ConversationReadMarker.defaultMarkRead
     ) {
         self.appState = appState
         self.moderationAccountRef = appState.activeAccountRef
@@ -1165,6 +1182,9 @@ final class ConversationViewModel {
         self.durableRetryOperations = durableRetryOperations
         self.inviteDeclineCalls = inviteDeclineCalls
         self.groupCalls = groupCalls
+        self.agentRequestCalls = agentRequestCalls
+        self.readMarkerSleep = readMarkerSleep
+        self.readMarkerMarkRead = readMarkerMarkRead
         let hiddenMessageIds = appState.activeAccountRef.map {
             MessageHideStore.hiddenMessageIds(accountRef: $0, groupIdHex: group.groupIdHex)
         } ?? []
@@ -1198,6 +1218,9 @@ final class ConversationViewModel {
         composer.canSendMediaAttachments = { [weak self] in self?.canSendMediaAttachments ?? false }
         composer.currentGroupEpoch = { [weak self] in self?.conversationWindow?.header.epoch }
         composer.onError = { [weak self] message in self?.error = message }
+        timelineStore.onAgentProjectionUpdated = { [weak self] in
+            self?.reconcileAgentInteractions()
+        }
     }
 
     isolated deinit {
@@ -1207,6 +1230,7 @@ final class ConversationViewModel {
         groupStateTask?.cancel()
         groupDetailsTask?.cancel()
         tailRefreshTask.cancel()
+        agentRequestSenderLoadTask?.cancel()
         composer.cancelDraftMediaUploads()
     }
 
@@ -1342,7 +1366,8 @@ final class ConversationViewModel {
         readMarker.advanceWatermark(to: newest, isDeleted: false)
     }
 
-    /// Advances the watermark to the newest eligible row in the loaded window.
+    /// Advances the watermark to the newest eligible row in the loaded window,
+    /// including hidden subagent replies withheld from the main timeline.
     /// When the window reaches the conversation tail that marks the whole
     /// conversation read, with no dependency on a row visibility edge.
     func markConversationReadThroughTail() {
@@ -1355,19 +1380,18 @@ final class ConversationViewModel {
     }
 
     private func newestTailWatermarkCandidate() -> AppMessageRecordFfi? {
-        for item in timelineStore.timeline.reversed() {
-            guard case .message(let record, _) = item.kind else { continue }
-            let accepted = ConversationReadMarker.nextWatermark(
-                candidateKey: timelineStore.historyOrderKey(forMessageIdHex: record.messageIdHex),
-                pendingKey: nil,
-                flushedKey: nil,
-                kind: record.kind,
-                tags: record.tags,
-                isDeleted: isDeleted(record.messageIdHex)
-            )
-            if accepted != nil { return record }
+        var candidates: [AppMessageRecordFfi] = timelineStore.timeline.compactMap { item in
+            guard case .message(let record, _) = item.kind else { return nil }
+            return record
         }
-        return nil
+        candidates.append(contentsOf: timelineStore.hiddenSubagentWatermarkCandidates())
+        return ConversationReadMarker.newestWatermarkCandidate(
+            in: candidates,
+            isDeleted: { [weak self] messageIdHex in self?.isDeleted(messageIdHex) ?? true },
+            orderKey: { [weak timelineStore] messageIdHex in
+                timelineStore?.historyOrderKey(forMessageIdHex: messageIdHex)
+            }
+        )
     }
 
     func hasReports(_ messageID: String) -> Bool {
@@ -2439,6 +2463,225 @@ final class ConversationViewModel {
 
     func agentEventDisplay(for item: TimelineItem) -> AgentEventPresentation.Display? {
         timelineStore.agentEventDisplay(for: item)
+    }
+
+    func agentItemProjection(forMessageId messageIdHex: String) -> AgentItemProjection? {
+        timelineStore.agentItemProjection(forMessageId: messageIdHex)
+    }
+
+    func subagentThreadSummary(forTaskMessageId taskMessageIdHex: String) -> AgentSubagentThreadSummary? {
+        timelineStore.subagentThreadSummary(forTaskMessageId: taskMessageIdHex)
+    }
+
+    func subagentThreadItems(forTaskMessageId taskMessageIdHex: String) -> [TimelineItem] {
+        timelineStore.subagentThreadItems(forTaskMessageId: taskMessageIdHex)
+    }
+
+    var activeRunningAgentTurns: [AgentItemProjection] {
+        timelineStore.activeRunningTurns()
+    }
+
+    var waitingAgentSubagents: [(task: AgentItemProjection, waiting: AgentItemProjection)] {
+        timelineStore.waitingSubagentTasks()
+    }
+
+    var latestAgentSessions: [AgentItemProjection] {
+        timelineStore.latestAgentSessions()
+    }
+
+    /// D-041: a secret question may only be answered from the chat when there are
+    /// exactly two members (the person and the agent).
+    var isTwoPersonChat: Bool {
+        AgentQuestionPrivacyPolicy.canAnswerSecretQuestionInChat(memberCount: displayMemberCount)
+    }
+
+    func answeredByDisplayName(for projection: AgentItemProjection) -> String? {
+        guard let senderHex = agentInteractions.settledByAccountId(for: projection) else { return nil }
+        if let me = myAccountId, senderHex.caseInsensitiveCompare(me) == .orderedSame {
+            return L10n.string("You")
+        }
+        return windowDisplayName(for: senderHex)
+    }
+
+    func reconcileAgentInteractions() {
+        agentInteractions.reconcile(settledEventIds: timelineStore.settledAgentEventIds)
+        let missing = agentInteractions.unknownSettledEventIds(in: timelineStore.allAgentItemProjections())
+        guard !missing.isEmpty else { return }
+        loadKind1202RequestSenders(for: missing)
+    }
+
+    private func loadKind1202RequestSenders(for queriedIds: Set<String>) {
+        guard let appState, let accountRef = appState.activeAccountRef else { return }
+        let groupIdHex = group.groupIdHex
+        let calls = agentRequestCalls
+        agentRequestSenderLoadTask?.cancel()
+        agentRequestSenderLoadTask = Task { @MainActor [weak self] in
+            var remaining = queriedIds
+            for limit: UInt32 in [200, 2_000, 10_000] {
+                guard let records = try? await calls.loadKind1202Messages(
+                    appState,
+                    accountRef,
+                    groupIdHex,
+                    limit
+                ), !Task.isCancelled else { return }
+                guard let self else { return }
+                self.agentInteractions.recordRequestSenders(records)
+                let resolved = remaining.filter { self.agentInteractions.requestSenderByEventId[$0] != nil }
+                if !resolved.isEmpty {
+                    self.agentInteractions.markSettledIdsQueried(resolved)
+                    remaining.subtract(resolved)
+                }
+                if remaining.isEmpty {
+                    return
+                }
+                // Fewer rows than requested means durable history is exhausted;
+                // mark the remaining IDs queried so we do not re-scan on every update.
+                if records.count < Int(limit) {
+                    self.agentInteractions.markSettledIdsQueried(remaining)
+                    return
+                }
+            }
+            if !remaining.isEmpty {
+                self?.agentInteractions.markSettledIdsQueried(remaining)
+            }
+        }
+    }
+
+    func sendAgentApprovalChoice(
+        _ choice: AgentItemBody.ApprovalChoice,
+        for projection: AgentItemProjection
+    ) async {
+        let payload = AgentRequestBuilder.approvalChoice(
+            agentPubkeyHex: projection.sender,
+            targetEventIdHex: projection.messageIdHex,
+            choiceId: choice.id,
+            choiceLabel: choice.label
+        )
+        await sendAgentRequest(
+            key: AgentInteractionStore.itemKey(targetEventIdHex: projection.messageIdHex),
+            summary: choice.label,
+            payload: payload
+        )
+    }
+
+    func sendAgentQuestionAnswers(
+        _ answers: [AgentQuestionReplyPayload],
+        for projection: AgentItemProjection,
+        containsSecret: Bool,
+        summary: String
+    ) async {
+        if containsSecret && !isTwoPersonChat {
+            appState?.present(.error(
+                L10n.string("Secret answer"),
+                message: L10n.string("Answer it at the terminal.")
+            ))
+            return
+        }
+        let payload = AgentRequestBuilder.questionAnswers(
+            agentPubkeyHex: projection.sender,
+            targetEventIdHex: projection.messageIdHex,
+            answers: answers,
+            containsSecret: containsSecret,
+            nonSecretSummary: containsSecret ? nil : summary
+        )
+        await sendAgentRequest(
+            key: AgentInteractionStore.itemKey(targetEventIdHex: projection.messageIdHex),
+            summary: containsSecret ? L10n.string("Answer sent") : summary,
+            payload: payload
+        )
+    }
+
+    func sendAgentInterrupt(agentPubkeyHex: String, targetEventIdHex: String?) async {
+        let payload = AgentRequestBuilder.interrupt(
+            agentPubkeyHex: agentPubkeyHex,
+            targetEventIdHex: targetEventIdHex
+        )
+        await sendAgentRequest(
+            key: AgentInteractionStore.stopKey(agentPubkeyHex: agentPubkeyHex, targetEventIdHex: targetEventIdHex),
+            summary: L10n.string("Stop"),
+            payload: payload
+        )
+    }
+
+    func sendAgentNewSession(agentPubkeyHex: String) async {
+        let payload = AgentRequestBuilder.newSession(agentPubkeyHex: agentPubkeyHex)
+        await sendAgentRequest(
+            key: AgentInteractionStore.newSessionKey(agentPubkeyHex: agentPubkeyHex),
+            summary: L10n.string("New session"),
+            payload: payload
+        )
+    }
+
+    func sendAgentSetSetting(
+        agentPubkeyHex: String,
+        setting: AgentItemBody.SessionSetting,
+        value: String
+    ) async {
+        let payload = AgentRequestBuilder.setSetting(
+            agentPubkeyHex: agentPubkeyHex,
+            settingId: setting.id,
+            value: value,
+            label: setting.label
+        )
+        await sendAgentRequest(
+            key: AgentInteractionStore.setSettingKey(agentPubkeyHex: agentPubkeyHex, settingId: setting.id),
+            summary: "\(setting.label): \(value)",
+            payload: payload
+        )
+    }
+
+    func sendAgentOwnAction(
+        agentPubkeyHex: String,
+        action: AgentItemBody.SessionAction
+    ) async {
+        let payload = AgentRequestBuilder.ownAction(
+            agentPubkeyHex: agentPubkeyHex,
+            actionId: action.id,
+            label: action.label
+        )
+        await sendAgentRequest(
+            key: AgentInteractionStore.ownActionKey(agentPubkeyHex: agentPubkeyHex, actionId: action.id),
+            summary: action.label,
+            payload: payload
+        )
+    }
+
+    func recheckAgentRequestStatus(forKey key: String) async {
+        guard let pending = agentInteractions.pendingRequest(forKey: key),
+              pending.statusUnknown,
+              !pending.sendFailed else { return }
+        await sendAgentRequest(
+            key: pending.key,
+            summary: pending.summary,
+            payload: pending.payload
+        )
+    }
+
+    private func sendAgentRequest(
+        key: String,
+        summary: String,
+        payload: AgentRequestPayload
+    ) async {
+        guard let appState,
+              let accountRef = appState.activeAccountRef,
+              let senderId = myAccountId else { return }
+        let groupIdHex = group.groupIdHex
+        let calls = agentRequestCalls
+        do {
+            _ = try await agentInteractions.submit(
+                key: key,
+                summary: summary,
+                senderAccountIdHex: senderId,
+                payload: payload,
+                checkStatus: { token in
+                    try await calls.localSendStatus(appState, accountRef, groupIdHex, token)
+                }
+            ) { request, token in
+                try await calls.sendCustomEvent(appState, accountRef, groupIdHex, request, token)
+            }
+        } catch {
+            appState.present(UserFacingError.toast(title: L10n.string("Couldn't send action"), error: error))
+        }
     }
 
     /// Index only the visible timeline's bounded text, sender, and attachment labels.
@@ -3595,10 +3838,7 @@ final class ConversationViewModel {
               deleteCapability(for: canonical).canDeleteForEveryone,
               let appState, let accountRef = appState.activeAccountRef
         else { return false }
-        timelineStore.deletedProjections.insertOptimistic(canonical.messageIdHex)
-        if timelineStore.deletedProjections.rebuild() {
-            timelineStore.noteProjectionChanged()
-        }
+        timelineStore.applyOptimisticDelete(canonical.messageIdHex)
         do {
             let client = try appState.currentMarmotClient()
             _ = try await deleteMessageOperation(
@@ -3611,10 +3851,7 @@ final class ConversationViewModel {
             Haptics.warning()
             return true
         } catch {
-            timelineStore.deletedProjections.removeOptimistic(canonical.messageIdHex)
-            if timelineStore.deletedProjections.rebuild() {
-                timelineStore.noteProjectionChanged()
-            }
+            timelineStore.rollbackOptimisticDelete(canonical.messageIdHex)
             Haptics.error()
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't delete message"), error: error))
             return false

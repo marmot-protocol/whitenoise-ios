@@ -154,6 +154,7 @@ nonisolated enum AccountSetupPresentation {
         case .otherInstallationPossible: L10n.string("Another installation may exist.")
         case .discoveryIncomplete: L10n.string("Some discovery sources could not be checked.")
         case .inspectionCompleted: L10n.string("A relay answered the check.")
+        case .rateLimited: L10n.string("A relay rate-limited this check. Wait a moment and retry.")
         }
     }
 }

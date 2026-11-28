@@ -14,6 +14,7 @@ class MarmotKitCoherenceTests(unittest.TestCase):
     def setUp(self):
         self.provenance = {
             "mdk-sha": "a" * 40, "mdk-tag": "marmotkit-snapshot-" + "a" * 40,
+            "channel": "snapshot",
             "published-at": "2026-09-08T00:00:00Z", "uniffi-version": "0.29.4",
             "features": "otlp-export,product-analytics-export", "swiftpm-checksum": "b" * 64,
         }
@@ -28,12 +29,36 @@ class MarmotKitCoherenceTests(unittest.TestCase):
         coherence.check_coherence(provenance or self.provenance,
                                   {"targets": [target or self.target]}, compiled or self.compiled)
 
-    def test_matching_snapshot_and_formal_release(self):
+    def test_matching_snapshot_rc_nightly_and_formal_release(self):
         self.check()
-        self.provenance["mdk-tag"] = self.compiled["mdk-tag"] = "marmotkit-v0.9.19"
-        self.target["url"] = ("https://github.com/marmot-protocol/mdk/releases/download/"
-                              "marmotkit-v0.9.19/MarmotKitFFI-0.9.19.xcframework.zip")
-        self.check()
+        for tag, release, channel in (
+            ("marmotkit-v0.19.0", "0.19.0", "stable"),
+            ("marmotkit-v0.20.0-rc.2", "0.20.0-rc.2", "rc"),
+            ("marmotkit-v0.20.0-nightly.20261126", "0.20.0-nightly.20261126", "nightly"),
+        ):
+            with self.subTest(tag=tag, channel=channel):
+                provenance = {**self.provenance, "mdk-tag": tag, "channel": channel}
+                compiled = {**self.compiled, "mdk-tag": tag, "channel": channel}
+                target = {
+                    **self.target,
+                    "url": f"https://github.com/marmot-protocol/mdk/releases/download/{tag}/MarmotKitFFI-{release}.xcframework.zip",
+                }
+                self.check(provenance=provenance, target=target, compiled=compiled)
+
+    def test_channel_disagreeing_with_tag_fails(self):
+        for tag, release, wrong_channel in (
+            ("marmotkit-v0.20.0-rc.2", "0.20.0-rc.2", "stable"),
+            ("marmotkit-v0.19.0", "0.19.0", "rc"),
+            ("marmotkit-snapshot-" + "a" * 40, "snapshot-" + "a" * 40, "stable"),
+        ):
+            with self.subTest(tag=tag, wrong_channel=wrong_channel), self.assertRaises(ValueError):
+                provenance = {**self.provenance, "mdk-tag": tag, "channel": wrong_channel}
+                compiled = {**self.compiled, "mdk-tag": tag, "channel": wrong_channel}
+                target = {
+                    **self.target,
+                    "url": f"https://github.com/marmot-protocol/mdk/releases/download/{tag}/MarmotKitFFI-{release}.xcframework.zip",
+                }
+                self.check(provenance=provenance, target=target, compiled=compiled)
 
     def test_each_compiled_metadata_mismatch_fails(self):
         for field in coherence.VERSION_FIELDS:

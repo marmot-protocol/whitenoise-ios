@@ -40,10 +40,14 @@ The project is intentionally split along the platform boundary: Swift owns prese
 - `NotificationServiceExtension/` - APNS wake handling and local notification decoration.
 - `Shared/` - extension-safe code shared by the app and notification extension.
 - `Packages/MarmotKit/` - generated UniFFI Swift bindings and the pinned remote XCFramework declaration.
+- `scripts/sync-rc.sh` - pins `develop` to MDK's latest verified MarmotKit Release Candidate.
+- `scripts/promote-stable.sh` - swaps an RC pin for the Stable MarmotKit release MDK promoted from it.
 - `scripts/sync-bindings.sh` - verifies and installs a published immutable `MarmotKit` release.
+- `CONTRIBUTING.md` - branch conventions, pull requests, and the daily RC bump flow.
+- `docs/release-flow.md` - `develop` vs. `master` channels, staging tags, Stable promotion, and hotfixes.
 - `docs/manual-tests.md` - release-focused manual checks for flows that are expensive to automate.
 - `docs/releases.md` - version bumps, validation, and immutable release tags on master.
-- `AGENTS.md` - canonical coding-agent guidance for this repo.
+- `AGENTS.md` - canonical coding-agent guidance for this repo (`CLAUDE.md` is a symlink).
 
 ## Requirements
 
@@ -121,23 +125,22 @@ xcodebuild -showdestinations \
   -scheme "Whitenoise (Production)"
 ```
 
-## MarmotKit Bindings
+## Branches And MarmotKit Bindings
 
-`Packages/MarmotKit/MARMOT_VERSION` records the immutable MDK release used for the current bindings.
+`Packages/MarmotKit/MARMOT_VERSION` records the immutable MDK release and channel (`rc` or `stable`) used for the current bindings.
 
-After publishing a MarmotKit snapshot for a full commit SHA on MDK `master`, install it with:
+- **`develop`** (default branch) pins MDK's daily verified Release Candidate (`marmotkit-vX.Y.Z-rc.N`). Feature work branches from `develop` and targets `develop`, and staging builds are cut from here. RCs are deleted upstream after 30 days.
+- **`master`** (production) pins **Stable** releases (`marmotkit-vX.Y.Z`) only, enforced by CI (`scripts/ci/check-marmotkit-channel.sh`).
 
-```sh
-./scripts/sync-bindings.sh <full-master-sha>
-```
-
-Install a formal MarmotKit release by version with:
+Common commands:
 
 ```sh
-./scripts/sync-bindings.sh 0.9.11
+just sync-rc                 # pin develop to the latest verified RC from mdk rc-meta
+just promote-stable          # on release/X.Y.Z, swap the RC for the Stable promoted from it
+just sync-bindings 0.19.0    # install a specific published release by version or SHA
 ```
 
-The script verifies the published manifest, SwiftPM checksum, generated Swift source, and source SHA before updating them together. Do not hand-edit generated files in `Packages/MarmotKit`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/release-flow.md](docs/release-flow.md) for the full branch, staging-tag, promotion, and hotfix workflow. All scripts verify every published digest, SwiftPM checksum, generated Swift source, privacy manifest, and source SHA before updating `Packages/MarmotKit`. Do not hand-edit generated files in `Packages/MarmotKit`.
 
 ## Privacy And Storage
 

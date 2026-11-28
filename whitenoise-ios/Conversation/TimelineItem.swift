@@ -75,6 +75,7 @@ nonisolated enum MessageClusterProjection {
     static func presentations(
         for timeline: [TimelineItem],
         historyImportBoundaries: [String: HistoryImportOrigin] = [:],
+        nonClusterableMessageIds: Set<String> = [],
         myAccountId: String? = nil,
         calendar: Calendar = .autoupdatingCurrent
     ) -> [String: MessageClusterPresentation] {
@@ -92,7 +93,8 @@ nonisolated enum MessageClusterProjection {
 
         for item in timeline {
             guard case .message(let record, _) = item.kind,
-                  isClusterable(record)
+                  isClusterable(record),
+                  !nonClusterableMessageIds.contains(record.messageIdHex)
             else {
                 previous = nil
                 continue

@@ -51,7 +51,14 @@ enum MessagePreview {
                 )
             }
             return mediaFallback(attachments)
-        case .agentActivity, .agentOperation:
+        case .agentActivity:
+            return AgentEventPresentation.previewText(from: record.plaintext)
+                ?? ContentSanitizer.compactSingleLine(
+                    record.plaintext,
+                    maxLength: AgentEventPresentation.maxPrimaryTextLength
+                )
+                ?? ""
+        case .agentOperation:
             return AgentEventPresentation.previewText(from: record.plaintext) ?? ""
         case .poll:
             return pollPreview(question: record.plaintext)
@@ -145,7 +152,16 @@ enum MessagePreview {
                 ) ?? ""
             }
             if MessageSemantics.isTypedAgentEventKind(preview.kind) {
-                return AgentEventPresentation.previewText(from: preview.plaintext) ?? ""
+                if let parsed = AgentEventPresentation.previewText(from: preview.plaintext) {
+                    return parsed
+                }
+                if preview.kind == MessageSemantics.kindAgentActivity {
+                    return ContentSanitizer.compactSingleLine(
+                        preview.plaintext,
+                        maxLength: AgentEventPresentation.maxPrimaryTextLength
+                    ) ?? ""
+                }
+                return ""
             }
             if preview.kind == MessageSemantics.kindPoll {
                 return pollPreview(question: preview.plaintext)
@@ -186,7 +202,16 @@ enum MessagePreview {
                 ) ?? ""
             }
             if MessageSemantics.isTypedAgentEventKind(preview.kind) {
-                return AgentEventPresentation.previewText(from: preview.plaintext) ?? ""
+                if let parsed = AgentEventPresentation.previewText(from: preview.plaintext) {
+                    return parsed
+                }
+                if preview.kind == MessageSemantics.kindAgentActivity {
+                    return ContentSanitizer.compactSingleLine(
+                        preview.plaintext,
+                        maxLength: AgentEventPresentation.maxPrimaryTextLength
+                    ) ?? ""
+                }
+                return ""
             }
             if preview.kind == MessageSemantics.kindPoll {
                 return pollPreview(question: preview.plaintext)
@@ -322,5 +347,15 @@ nonisolated enum MessageDeletionPresentation {
         source == .admin
             ? L10n.string("This message was deleted by an admin.")
             : L10n.string("This message was deleted")
+    }
+
+    static func bubbleText(source: DeletionSourceFfi, isFromMe: Bool) -> String {
+        if source == .admin {
+            return L10n.string("This message was deleted by an admin.")
+        }
+        if source == .author && isFromMe {
+            return L10n.string("You deleted this message.")
+        }
+        return L10n.string("This message was deleted.")
     }
 }

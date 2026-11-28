@@ -269,7 +269,7 @@ struct SendDispatchAndCancellationTests {
         let composer = ComposerModel(appState: appState, groupIdHex: groupId, timelineStore: store,
                                      marmotCalls: marmot.calls)
         composer.canSendMessages = { true }
-        let statuses: [LocalSendStatusFfi?] = [nil, .queued]
+        let statuses: [LocalSendStatusFfi?] = [nil, .queued(messageIdHex: String(repeating: "11", count: 32))]
         for status in statuses {
             marmot.localSendStatus = { _, _, _ in status }
             marmot.sendText = { _, _, _, _ in

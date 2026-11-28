@@ -51,6 +51,27 @@ nonisolated enum AgentEventPresentation {
         return payload.resolvedPrimaryText
     }
 
+    /// Fallback display for a kind-1201 row that MDK could not parse as a
+    /// structured `AgentItemFfi` and whose `plaintext` is not legacy JSON
+    /// (for example, an older Hermes plugin format). Never hides the row.
+    static func plainFallbackDisplay(for record: AppMessageRecordFfi) -> Display {
+        let primary: String
+        if record.plaintext.utf8.count <= MessagePreview.timelineMediaPreviewMaxJsonBytes,
+           let cleaned = ContentSanitizer.compactSingleLine(record.plaintext, maxLength: maxPrimaryTextLength),
+           !cleaned.isEmpty {
+            primary = cleaned
+        } else {
+            primary = L10n.string("Agent activity")
+        }
+        return Display(
+            kind: .operation,
+            primaryText: primary,
+            secondaryText: nil,
+            iconName: "cpu",
+            reportsWorkInProgress: false
+        )
+    }
+
     private static func activityDisplay(_ record: AppMessageRecordFfi) -> Display? {
         let payload = parsePayload(record.plaintext)
         let status = normalized(

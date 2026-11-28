@@ -47,13 +47,14 @@ manifest['installed_swift_sha256']=hashlib.sha256((package/'Sources/MarmotKit/Ma
 (package/'LOCAL_BUILD.json').write_text(json.dumps(manifest,indent=2)+'\n')
 built=datetime.datetime.now(datetime.timezone.utc).isoformat()
 uniffi=re.search(r'uniffi = \{ version = "([^"]+)"', (mdk/'crates/marmot-uniffi/Cargo.toml').read_text()).group(1)
-(package/'MARMOT_VERSION').write_text(f'mdk-sha: {sha}\nmdk-branch: master\nmdk-tag: local-{sha}\nbuilt-at: {built}\nfeatures: otlp-export,product-analytics-export\nSee LOCAL_BUILD.json for exact artifact checksums and toolchain.\n')
+(package/'MARMOT_VERSION').write_text(f'mdk-sha: {sha}\nmdk-branch: master\nmdk-tag: local-{sha}\nchannel: local\nbuilt-at: {built}\nfeatures: otlp-export,product-analytics-export\nSee LOCAL_BUILD.json for exact artifact checksums and toolchain.\n')
 (package/'Sources/MarmotKit/MarmotKitVersion.swift').write_text(f'''import Foundation
 
 /// Provenance for locally built, unpublished bindings.
 public enum MarmotKitVersion {{
     public static let mdkSHA = "{sha}"
     public static let mdkTag = "local-{sha}"
+    public static let channel = "local"
     public static let builtAt = "{built}"
     public static let uniffiVersion = "{uniffi}"
     public static let features = "otlp-export,product-analytics-export"

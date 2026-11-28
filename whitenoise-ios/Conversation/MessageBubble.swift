@@ -379,6 +379,7 @@ extension MessageBubble: Equatable {
             && lhs.hasReports == rhs.hasReports
             && lhs.usesReviewLayout == rhs.usesReviewLayout
             && lhs.agentActivity == rhs.agentActivity
+            && lhs.isAgentCommentary == rhs.isAgentCommentary
             && lhs.voiceTranscript == rhs.voiceTranscript
             && lhs.readingSpeech === rhs.readingSpeech
             && lhs.displaysReader == rhs.displaysReader
@@ -466,6 +467,7 @@ struct MessageBubble: View {
     var hasReports: Bool = false
     var usesReviewLayout: Bool = false
     var agentActivity: AgentEventPresentation.Display?
+    var isAgentCommentary: Bool = false
     var clusterPresentation: MessageClusterPresentation = .none
     var showsSenderIdentity = true
     var replyPreview: ConversationReplyPreview? = nil
@@ -1123,13 +1125,7 @@ struct MessageBubble: View {
     private var deletedBubble: some View {
         HStack(spacing: 6) {
             Image(systemName: "trash")
-            Text(
-                deletionSource == .admin
-                    ? L10n.string("This message was deleted by an admin.")
-                    : deletionSource == .author && isFromMe
-                        ? L10n.string("You deleted this message.")
-                        : L10n.string("This message was deleted.")
-            )
+            Text(MessageDeletionPresentation.bubbleText(source: deletionSource, isFromMe: isFromMe))
         }
         .font(.subheadline)
         .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe).opacity(0.8))
@@ -1217,9 +1213,10 @@ struct MessageBubble: View {
                 }
             }
         }
-        .font(.body)
+        .font(isAgentCommentary ? .subheadline : .body)
         .background { bubbleBackground }
         .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
+        .opacity(isAgentCommentary ? 0.82 : 1)
         .overlay {
             if let debugStyle {
                 RoundedRectangle(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous)

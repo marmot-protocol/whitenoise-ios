@@ -2,29 +2,37 @@
 
 Each shipped app version/build must map to an immutable annotated Git tag on
 its exact `master` commit. Build the distribution archive from that commit so
-the tag identifies the source that shipped.
+the tag identifies the source that shipped. See [docs/release-flow.md](release-flow.md)
+for the `develop` RC → staging tag → `release/X.Y.Z` → Stable promotion flow.
 
 ## Prepare the commit
 
-1. Inspect the worktree and fetch `origin/master` and tags. Preserve unrelated
-   edits and the user's chosen marketing version.
+1. Choose the tested staging tag from `develop` and branch `release/X.Y.Z` from
+   it (or branch from the `v` tag on `master` for a production hotfix). Inspect
+   the worktree and preserve unrelated edits and the user's chosen marketing
+   version.
 2. Set `MARKETING_VERSION` and increment `CURRENT_PROJECT_VERSION` consistently
    for the app and Notification Service Extension, in production and staging.
    Unit-test target versions are independent.
-3. For MarmotKit updates, run `./scripts/sync-bindings.sh <version>` and commit
-   its generated Swift source, package binary pin/checksum, and provenance
-   together. Address any required app compatibility changes. If the bump
-   advances the account storage schema (see the release's MDK integration
-   guide), run "In-place MarmotKit upgrade" in `docs/manual-tests.md` on a
-   device before release, and record its results in the release issue or PR.
-4. Run the production simulator tests, production release device build, and
+3. For an RC-based release branched from a staging tag, swap the staging RC pin
+   for the Stable MarmotKit release MDK promoted from it using
+   `just promote-stable` (`./scripts/promote-stable.sh`), and commit its
+   generated Swift source, package binary pin/checksum, and provenance together.
+   `promote-stable` refuses any Stable release not promoted from the tested RC.
+   (For a hotfix branched from a Stable `master` tag, keep the existing Stable
+   pin and skip `promote-stable`.) If the release advances the account storage
+   schema (see the release's MDK integration guide), run "In-place MarmotKit
+   upgrade" in `docs/manual-tests.md` on a device before release, and record its
+   results in the release issue or PR.
+4. Run `just precommit` (lint, MarmotKit provenance and channel checks, and the
+   simulator test suite), a production Release device build, and
    `git diff --check` as described in `AGENTS.md`. Record results and whether
    code signing was enabled. Review `docs/manual-tests.md`; record pending
    checks explicitly and complete the relevant device checks before shipping.
-5. Review the staged diff and make one release checkpoint commit on `master`.
-   Include the app version/build and MarmotKit version in the commit message.
-   If master has advanced, integrate it and validate the resulting code before
-   tagging. Do not tag an unmerged feature-branch commit.
+5. Open a PR from `release/X.Y.Z` into `master`. CI enforces that `master` pins
+   Stable MarmotKit only. After merging into `master`, create the annotated tag
+   below and merge `master` back into `develop`. Do not tag an unmerged
+   feature-branch commit.
 
 ## Publish the source checkpoint
 

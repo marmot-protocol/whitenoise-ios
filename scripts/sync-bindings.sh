@@ -7,7 +7,17 @@
 #
 # Examples:
 #   ./scripts/sync-bindings.sh 4e056e708afeb86fb4e62049b73c8ad4155ddf1a
-#   ./scripts/sync-bindings.sh 0.9.11
+#   ./scripts/sync-bindings.sh 0.19.0          # Stable: what master and production pin
+#   ./scripts/sync-bindings.sh 0.20.0-rc.2     # Release Candidate: develop and staging only
+#
+# Prefer the wrappers: `scripts/sync-rc.sh` pins the latest verified RC from MDK's
+# `rc-meta` branch, and `scripts/promote-stable.sh` swaps an RC pin for the Stable
+# release promoted from it. See docs/release-flow.md.
+#
+# MARMOTKIT_EXPECTED_ASSETS may name a JSON file of {"<asset name>": "<sha256>"}
+# (sync-rc.sh writes one from rc/latest.json): the binary, its SwiftPM checksum, the
+# Swift source and the privacy manifest must each be listed and match.
+# MARMOTKIT_EXTRA_STAMPS may hold extra `key: value` lines for MARMOT_VERSION.
 
 set -euo pipefail
 
@@ -28,6 +38,23 @@ elif [[ "$RELEASE" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.
 else
     echo "error: release must be a semantic version or a full lowercase 40-character SHA" >&2
     exit 2
+fi
+
+# Stable releases are permanent; RCs, nightlies and snapshots are pre-releases that
+# upstream deletes after 30 days, so only Stable may ship
+# (scripts/ci/check-marmotkit-channel.sh holds master to it).
+if [[ "$RELEASE_ID" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    CHANNEL="stable"
+    MDK_BRANCH="release"
+elif [[ "$RELEASE_ID" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+    CHANNEL="rc"
+    MDK_BRANCH="canary"
+elif [[ "$RELEASE_ID" == *-nightly.* ]]; then
+    CHANNEL="nightly"
+    MDK_BRANCH="master"
+else
+    CHANNEL="snapshot"
+    MDK_BRANCH="master"
 fi
 
 IOS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -55,6 +82,23 @@ download "$SWIFT_ASSET"
 download "$MANIFEST_ASSET"
 download "$CHECKSUMS_ASSET"
 
+# Digests from a channel manifest (rc/latest.json), checked before anything else
+# is read from the downloads.
+verify_expected() {
+    [[ -n "${MARMOTKIT_EXPECTED_ASSETS:-}" ]] || return 0
+    python3 -I - "$MARMOTKIT_EXPECTED_ASSETS" "$TEMP_DIR" "$@" <<'PYEXPECTED'
+import hashlib, json, pathlib, sys
+expected = json.loads(pathlib.Path(sys.argv[1]).read_text())
+root = pathlib.Path(sys.argv[2])
+for name in sys.argv[3:]:
+    want = expected.get(name)
+    assert isinstance(want, str) and len(want) == 64, f'{name}: not listed in the channel manifest'
+    got = hashlib.sha256((root / name).read_bytes()).hexdigest()
+    assert got == want, f'{name}: sha256 {got} does not match the channel manifest {want}'
+PYEXPECTED
+}
+verify_expected "$BINARY_ASSET" "$BINARY_ASSET.swiftpm-checksum" "$SWIFT_ASSET"
+
 SOURCE_SHA="$(plutil -extract source_sha raw -o - "$TEMP_DIR/$MANIFEST_ASSET")"
 if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
     echo "error: manifest contains an invalid source SHA: $SOURCE_SHA" >&2
@@ -71,7 +115,8 @@ if [[ ! "$EXPECTED_BINARY_CHECKSUM" =~ ^[0-9a-f]{64}$ ]]; then
     exit 1
 fi
 COMPUTED_BINARY_CHECKSUM="$(swift package compute-checksum "$TEMP_DIR/$BINARY_ASSET")"
-if [[ "$COMPUTED_BINARY_CHECKSUM" != "$EXPECTED_BINARY_CHECKSUM" ]]; then
+COMPUTED_BINARY_SHA="$(shasum -a 256 "$TEMP_DIR/$BINARY_ASSET" | awk '{ print $1 }')"
+if [[ "$COMPUTED_BINARY_CHECKSUM" != "$EXPECTED_BINARY_CHECKSUM" || "$COMPUTED_BINARY_SHA" != "$EXPECTED_BINARY_CHECKSUM" ]]; then
     echo "error: binary checksum mismatch" >&2
     exit 1
 fi
@@ -108,6 +153,7 @@ DISTRIBUTION="$(plutil -extract distribution raw -o - "$TEMP_DIR/$MANIFEST_ASSET
 if [[ "$DISTRIBUTION" == "static-library-and-privacy-v1" ]]; then
     download "$PRIVACY_ASSET"
     download "$PRIVACY_ASSET.sha256"
+    verify_expected "$PRIVACY_ASSET"
     EXPECTED_PRIVACY_SHA="$(awk -v file="$PRIVACY_ASSET" '$1 == "sha256" && $3 == file { print $2 }' "$TEMP_DIR/$CHECKSUMS_ASSET")"
     COMPUTED_PRIVACY_SHA="$(shasum -a 256 "$TEMP_DIR/$PRIVACY_ASSET" | awk '{ print $1 }')"
     SIDECAR_PRIVACY_SHA="$(awk '{ print $1 }' "$TEMP_DIR/$PRIVACY_ASSET.sha256")"
@@ -118,6 +164,9 @@ if [[ "$DISTRIBUTION" == "static-library-and-privacy-v1" ]]; then
     plutil -lint "$TEMP_DIR/$PRIVACY_ASSET"
 elif [[ -n "$DISTRIBUTION" ]]; then
     echo "error: unsupported MarmotKit distribution: $DISTRIBUTION" >&2
+    exit 1
+elif [[ -n "${MARMOTKIT_EXPECTED_ASSETS:-}" ]]; then
+    echo "error: a channel release must carry its privacy manifest separately" >&2
     exit 1
 fi
 
@@ -136,6 +185,7 @@ PYVERIFY
 echo "==> Installing generated Swift source"
 cp "$TEMP_DIR/$SWIFT_ASSET" "$PACKAGE_DIR/Sources/MarmotKit/MarmotKit.swift"
 perl -pi -e 's/[ \t]+$//' "$PACKAGE_DIR/Sources/MarmotKit/MarmotKit.swift"
+VENDORED_SWIFT_SHA="$(shasum -a 256 "$PACKAGE_DIR/Sources/MarmotKit/MarmotKit.swift" | awk '{ print $1 }')"
 
 if [[ "$DISTRIBUTION" == "static-library-and-privacy-v1" ]]; then
     mkdir -p "$PACKAGE_DIR/Sources/MarmotKit/Resources"
@@ -169,8 +219,9 @@ sed -i '' -E \
 
 cat > "$PACKAGE_DIR/MARMOT_VERSION" <<EOF
 mdk-sha: $SOURCE_SHA
-mdk-branch: master
+mdk-branch: $MDK_BRANCH
 mdk-tag: $RELEASE_TAG
+channel: $CHANNEL
 published-at: $PUBLISHED_AT
 uniffi-version: $UNIFFI_VERSION
 features: $FEATURES
@@ -179,12 +230,21 @@ ios-deployment-target: 18.0
 rust-release-opt-level: $RUST_OPT_LEVEL
 rust-release-codegen-units: $RUST_CODEGEN_UNITS
 swiftpm-checksum: $EXPECTED_BINARY_CHECKSUM
+swift-published-sha256: $EXPECTED_SWIFT_SHA
+swift-vendored-sha256: $VENDORED_SWIFT_SHA
 distribution: ${DISTRIBUTION:-legacy-framework}
 privacy-sha256: ${EXPECTED_PRIVACY_SHA:-embedded-in-framework}
+EOF
+if [[ -n "${MARMOTKIT_EXTRA_STAMPS:-}" ]]; then
+    printf '%s\n' "$MARMOTKIT_EXTRA_STAMPS" >> "$PACKAGE_DIR/MARMOT_VERSION"
+fi
+cat >> "$PACKAGE_DIR/MARMOT_VERSION" <<'EOF'
 
 Notes:
-- Refresh from a published immutable artifact with:
-  whitenoise-ios/scripts/sync-bindings.sh <version-or-full-master-sha>
+- develop pins the latest verified RC: `just sync-rc` (scripts/sync-rc.sh).
+- master pins Stable only: `just promote-stable` swaps the RC for the Stable promoted from it.
+- Any published release: `just sync-bindings <version-or-full-master-sha>`.
+- See docs/release-flow.md.
 EOF
 
 cat > "$PACKAGE_DIR/Sources/MarmotKit/MarmotKitVersion.swift" <<EOF
@@ -195,6 +255,8 @@ import Foundation
 public enum MarmotKitVersion {
     public static let mdkSHA = "$SOURCE_SHA"
     public static let mdkTag = "$RELEASE_TAG"
+    /// \`stable\`, \`rc\`, \`nightly\` or \`snapshot\`; only \`stable\` may ship.
+    public static let channel = "$CHANNEL"
     public static let builtAt = "$PUBLISHED_AT"
     public static let uniffiVersion = "$UNIFFI_VERSION"
     public static let features = "$FEATURES"
@@ -202,6 +264,8 @@ public enum MarmotKitVersion {
 EOF
 
 echo ""
-echo "Installed MarmotKit $RELEASE_TAG"
+echo "Installed MarmotKit $RELEASE_TAG ($CHANNEL)"
 echo "  source:   $SOURCE_SHA"
 echo "  checksum: $EXPECTED_BINARY_CHECKSUM"
+echo "  swift:    $VENDORED_SWIFT_SHA (published $EXPECTED_SWIFT_SHA)"
+echo "  privacy:  ${EXPECTED_PRIVACY_SHA:-embedded in framework}"

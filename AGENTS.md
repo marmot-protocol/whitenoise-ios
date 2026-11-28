@@ -1,8 +1,29 @@
 # Agent Notes
 
-This repo is a SwiftUI iOS app around the Marmot Rust runtime. Read this before changing code.
+This repo is a SwiftUI iOS app around the Marmot Rust runtime. Read this before changing code. People should start with [CONTRIBUTING.md](CONTRIBUTING.md); everything below applies to them too.
 
 `AGENTS.md` is the canonical agent guidance file. `CLAUDE.md` should remain a symlink to this file for Claude-based tooling.
+
+## Branches, pull requests and releases
+
+- **Work branches from `develop`, and pull requests target `develop`.** `master` is production:
+  it changes only through a `release/X.Y.Z` pull request (a staging tag plus the Stable
+  MarmotKit pin) or a hotfix. Never open a feature pull request into `master`, and never merge
+  `develop` into it wholesale.
+- **MarmotKit channel follows the branch.** `develop` pins the daily Release Candidate
+  (`just sync-rc`); `master` pins Stable only (`just promote-stable`), and the CI check
+  "MarmotKit release channel" (`scripts/ci/check-marmotkit-channel.sh`) fails a pull request
+  into `master` that pins anything else. Do not move the pin as a side effect of other work;
+  never hand-edit `Packages/MarmotKit`, rerun the script instead.
+- **The daily bump PR** (`automation/marmotkit-rc`, from the "MarmotKit RC bump" workflow) is
+  the place to fix call sites a `minor` RC breaks: read `rc/integration-notes.md` and the PR's
+  list of breaking UniFFI changes, push fixes to that branch. The workflow stops replacing the
+  branch once it holds commits by anyone else.
+- **Before handing work off**, run `just precommit` (or at least `./scripts/lint.sh`,
+  `just check-marmotkit`, and `./scripts/test.sh`) and report what failed rather than calling
+  it done. CI's required statuses are `Lint result` and `Tests result`.
+- The whole flow, with staging tags, promotion and hotfixes:
+  [docs/release-flow.md](docs/release-flow.md).
 
 ## Start Here
 
@@ -140,29 +161,34 @@ default-relay replacement, which returns its own diff.
 
 The generated Swift bindings and immutable remote binary declaration live in `Packages/MarmotKit`. The source of truth is the MDK MarmotKit release published from `marmot-protocol/mdk`.
 
-Install a published snapshot using its full `master` commit SHA:
+- `develop` pins MDK's daily verified Release Candidate (`marmotkit-vX.Y.Z-rc.N`):
 
 ```sh
+just sync-rc                 # or ./scripts/sync-rc.sh
+```
+
+- `master` pins Stable releases only (`marmotkit-vX.Y.Z`), promoted from the RC that staging soaked:
+
+```sh
+just promote-stable X.Y.Z    # or ./scripts/promote-stable.sh X.Y.Z
+```
+
+- To install a specific formal release, RC tag, or published `master` snapshot SHA directly:
+
+```sh
+./scripts/sync-bindings.sh 0.20.0-rc.2
+./scripts/sync-bindings.sh 0.20.0
 ./scripts/sync-bindings.sh <full-master-sha>
 ```
 
-Install a formal release or a dated nightly using its version:
-
-```sh
-./scripts/sync-bindings.sh 0.9.21
-./scripts/sync-bindings.sh 0.14.0-nightly.20261022
-```
-
-The app pins the formal MarmotKit 0.19.0 release. Nightlies are for testing only
-and are deleted after 30 days; pin a formal release before shipping. For local
-reproduction only,
+`scripts/ci/check-marmotkit-channel.sh` enforces that `master` pins only `channel: stable` and warns when a pre-release pin is 23 or more days old (GitHub deletes RC assets after 30 days). For local reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
 matching artifacts with both exporters; restore the published pin before committing.
-Keep the XCFramework ignored. Since 0.16.0 the generated Swift ships
-`nextCancellable()` for the five snapshot subscriptions; never add host-side
+Keep the XCFramework ignored. Since 0.16.0 (expanded in 0.20.0 to cover `OnboardingSubscription`, `EventsSubscription`, and the other stream subscriptions) the generated Swift ships
+`nextCancellable()` for MDK subscriptions; never add host-side
 copies, which Swift rejects as duplicates. On each binding refresh run the native
 cancellation tests (`CancellableSubscriptionAdapterTests` and
-`RuntimeOwnershipTests`). Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
+`RuntimeOwnershipTests`). Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, checksum, and privacy manifest must always move together.
 
 Every `Marmot` construction, including the NSE and tests, passes
 `marmotDeploymentWhiteNoise()`; its keychain service is the one existing installs

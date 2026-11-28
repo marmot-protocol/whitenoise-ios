@@ -3,14 +3,14 @@ name: Tests
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [master, develop]
 
 permissions:
   contents: read
 
 concurrency:
   group: tests-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.ref != 'refs/heads/develop' }}
 
 jobs:
   # Every pull request runs this workflow so the required "Tests result"
@@ -46,7 +46,7 @@ jobs:
           relevant=false
           while IFS= read -r f; do
             case "$f" in
-              whitenoise-ios/*|whitenoise-iosTests/*|Shared/*|NotificationServiceExtension/*|Vendored/*|Config/*|whitenoise-ios.xcodeproj/*|Packages/*|scripts/sync-local-bindings.sh|Info.plist|scripts/check-analytics-release-config.py|scripts/check-privacy-release-config.py|scripts/check-localization-catalog.py|scripts/check-marmotkit-bindings.py|scripts/tests/*|scripts/test.sh|scripts/pick-simulator.sh|.github/workflows/tests.yml) relevant=true ;;
+              whitenoise-ios/*|whitenoise-iosTests/*|Shared/*|NotificationServiceExtension/*|Vendored/*|Config/*|whitenoise-ios.xcodeproj/*|Packages/*|scripts/sync-*.sh|scripts/promote-stable.sh|Info.plist|scripts/check-analytics-release-config.py|scripts/check-privacy-release-config.py|scripts/check-localization-catalog.py|scripts/check-marmotkit-bindings.py|scripts/ci/*|scripts/tests/*|scripts/test.sh|scripts/pick-simulator.sh|.github/workflows/tests.yml) relevant=true ;;
             esac
           done <<< "$files"
           echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
@@ -103,6 +103,9 @@ jobs:
       - name: Verify published MarmotKit provenance
         run: python3 scripts/check-marmotkit-bindings.py
 
+      - name: Check MarmotKit release channel
+        run: scripts/ci/check-marmotkit-channel.sh
+
       - name: Test release configuration checks
         run: python3 -m unittest discover -s scripts/tests
 
@@ -121,8 +124,8 @@ jobs:
         run: defaults write com.apple.iphonesimulator PasteboardAutomaticSync -bool false
 
       # Compiler cache keys hash compiler inputs rather than file mtimes, so a
-      # fresh checkout still replays cached objects. Only master writes the
-      # cache; pull requests read master's copy and never evict each other.
+      # fresh checkout still replays cached objects. Only master and develop
+      # write the cache; pull requests read their copy and never evict each other.
       # To disable, drop WN_TEST_COMPILATION_CACHE from the job env above.
       - name: Restore compilation cache
         id: compilation-cache
@@ -142,7 +145,7 @@ jobs:
         run: ./scripts/test.sh
 
       - name: Save compilation cache
-        if: always() && github.ref == 'refs/heads/master'
+        if: always() && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: build/CompilationCache
