@@ -113,6 +113,10 @@ boot_simulator() {
   fi
 }
 
+if [ -n "${WN_TEST_DERIVED_DATA:-}" ]; then
+  rm -f "$WN_TEST_DERIVED_DATA"/Build/Products/*.xctestrun
+fi
+
 phase "build-for-testing" run build-for-testing "${xcodebuild_args[@]}" "${build_settings[@]}"
 
 if [ -n "$boot_pid" ]; then
@@ -121,6 +125,25 @@ elif [ -n "$udid" ]; then
   phase "simulator-boot" boot_simulator
 fi
 
-phase "test-without-building" run test-without-building \
-  "${xcodebuild_args[@]}" \
-  -resultBundlePath "$RESULT_BUNDLE"
+# When derived data is isolated, run the freshly generated .xctestrun directly
+# so `test-without-building` skips reopening the project and re-resolving the
+# SwiftPM package graph while the newly booted simulator is still settling.
+xctestrun_args=()
+if [ -n "${WN_TEST_DERIVED_DATA:-}" ]; then
+  shopt -s nullglob
+  xctestruns=("$WN_TEST_DERIVED_DATA"/Build/Products/*.xctestrun)
+  shopt -u nullglob
+  if [ "${#xctestruns[@]}" -eq 1 ]; then
+    xctestrun_args=(-xctestrun "${xctestruns[0]}" -destination "$DESTINATION")
+  fi
+fi
+
+if [ "${#xctestrun_args[@]}" -gt 0 ]; then
+  phase "test-without-building" run test-without-building \
+    "${xctestrun_args[@]}" \
+    -resultBundlePath "$RESULT_BUNDLE"
+else
+  phase "test-without-building" run test-without-building \
+    "${xcodebuild_args[@]}" \
+    -resultBundlePath "$RESULT_BUNDLE"
+fi
