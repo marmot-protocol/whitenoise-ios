@@ -1392,31 +1392,31 @@ final class TimelineStore {
 
     @discardableResult
     private func rebuildAgentProjections() -> Bool {
-        if agentItemProjectionByMessageId.isEmpty
-            && subagentThreadIndex == .empty
-            && settledAgentEventIds.isEmpty {
-            return false
-        }
-        let orderedIds: [String]
-        if let preparedOrder {
-            orderedIds = preparedOrder
+        let nextIndex: AgentSubagentThreadIndex
+        if agentItemProjectionByMessageId.isEmpty {
+            nextIndex = .empty
         } else {
-            orderedIds = messageById.values
-                .sorted { lhs, rhs in
-                    let lts = TimelineItem.sortTimestamp(for: lhs)
-                    let rts = TimelineItem.sortTimestamp(for: rhs)
-                    return lts == rts ? lhs.messageIdHex < rhs.messageIdHex : lts < rts
-                }
-                .map(\.messageIdHex)
+            let orderedIds: [String]
+            if let preparedOrder {
+                orderedIds = preparedOrder
+            } else {
+                orderedIds = messageById.values
+                    .sorted { lhs, rhs in
+                        let lts = TimelineItem.sortTimestamp(for: lhs)
+                        let rts = TimelineItem.sortTimestamp(for: rhs)
+                        return lts == rts ? lhs.messageIdHex < rhs.messageIdHex : lts < rts
+                    }
+                    .map(\.messageIdHex)
+            }
+            let senderById = messageById.mapValues(\.sender)
+            nextIndex = AgentSubagentThreadIndex.build(
+                orderedMessageIds: orderedIds,
+                agentItemsByMessageId: agentItemProjectionByMessageId,
+                threadRefByMessageId: threadRefByMessageId,
+                senderByMessageId: senderById,
+                blockedSenders: blockedAuthorIds
+            )
         }
-        let senderById = messageById.mapValues(\.sender)
-        let nextIndex = AgentSubagentThreadIndex.build(
-            orderedMessageIds: orderedIds,
-            agentItemsByMessageId: agentItemProjectionByMessageId,
-            threadRefByMessageId: threadRefByMessageId,
-            senderByMessageId: senderById,
-            blockedSenders: blockedAuthorIds
-        )
         var nextSettled: Set<String> = []
         for projection in agentItemProjectionByMessageId.values {
             nextSettled.formUnion(projection.item.settles)

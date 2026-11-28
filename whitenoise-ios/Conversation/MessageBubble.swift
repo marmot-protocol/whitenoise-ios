@@ -1125,13 +1125,7 @@ struct MessageBubble: View {
     private var deletedBubble: some View {
         HStack(spacing: 6) {
             Image(systemName: "trash")
-            Text(
-                deletionSource == .admin
-                    ? L10n.string("This message was deleted by an admin.")
-                    : deletionSource == .author && isFromMe
-                        ? L10n.string("You deleted this message.")
-                        : L10n.string("This message was deleted.")
-            )
+            Text(MessageDeletionPresentation.bubbleText(source: deletionSource, isFromMe: isFromMe))
         }
         .font(.subheadline)
         .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe).opacity(0.8))

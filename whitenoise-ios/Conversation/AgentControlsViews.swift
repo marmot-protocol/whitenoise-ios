@@ -481,6 +481,9 @@ private struct AgentSubagentThreadContent: View {
                     } else {
                         ForEach(threadItems) { item in
                             threadRow(for: item)
+                                .onAppear {
+                                    viewModel.markSubagentThreadMessagesRead([item])
+                                }
                         }
                     }
                 }
@@ -616,15 +619,34 @@ private struct AgentSubagentThreadContent: View {
                 )
             } else {
                 // Subagent words (kind 1111 comment) or human reply in thread.
-                let isCommentary = MessageSemantics.isAgentCommentary(tags: record.tags)
+                let isDeleted = viewModel.isDeleted(record.messageIdHex)
+                let isFromMe = MessageOwnership.isMine(
+                    direction: record.direction,
+                    sender: record.sender,
+                    myAccountId: viewModel.myAccountId
+                )
+                let isCommentary = !isDeleted && MessageSemantics.isAgentCommentary(tags: record.tags)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(viewModel.windowDisplayName(for: record.sender))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    Text(ContentSanitizer.messageBody(record.plaintext))
-                        .font(isCommentary ? .subheadline : .body)
-                        .foregroundStyle(isCommentary ? .secondary : .primary)
+                    if isDeleted {
+                        HStack(spacing: 6) {
+                            Image(systemName: "trash")
+                            Text(MessageDeletionPresentation.bubbleText(
+                                source: viewModel.deletionSource(for: record.messageIdHex),
+                                isFromMe: isFromMe
+                            ))
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text(ContentSanitizer.messageBody(record.plaintext))
+                            .font(isCommentary ? .subheadline : .body)
+                            .foregroundStyle(isCommentary ? .secondary : .primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .padding(12)
                 .frame(maxWidth: 540, alignment: .leading)

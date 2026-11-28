@@ -348,4 +348,14 @@ nonisolated enum MessageDeletionPresentation {
             ? L10n.string("This message was deleted by an admin.")
             : L10n.string("This message was deleted")
     }
+
+    static func bubbleText(source: DeletionSourceFfi, isFromMe: Bool) -> String {
+        if source == .admin {
+            return L10n.string("This message was deleted by an admin.")
+        }
+        if source == .author && isFromMe {
+            return L10n.string("You deleted this message.")
+        }
+        return L10n.string("This message was deleted.")
+    }
 }

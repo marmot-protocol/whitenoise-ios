@@ -319,6 +319,9 @@ final class ConversationViewModel {
     @ObservationIgnored private let durableRetryOperations: DurableRetryOperations
     @ObservationIgnored private let inviteDeclineCalls: InviteDeclineCalls
     @ObservationIgnored private let groupCalls: ConversationGroupCalls
+    @ObservationIgnored private let agentRequestCalls: AgentRequestCalls
+    @ObservationIgnored private let readMarkerSleep: @Sendable (Duration) async throws -> Void
+    @ObservationIgnored private let readMarkerMarkRead: ConversationReadMarker.MarkReadHandler
     @ObservationIgnored let advisoryPrompter = GroupChangeAdvisoryPrompter()
     /// Sends NIP-30 custom emoji drawn from `customEmojiCatalog`; holds the
     /// uploaded references retries reuse.
@@ -423,7 +426,9 @@ final class ConversationViewModel {
         orderKey: { [weak timelineStore] messageIdHex in
             timelineStore?.historyOrderKey(forMessageIdHex: messageIdHex)
         },
-        onChatListRowUpdated: onChatListRowUpdated
+        onChatListRowUpdated: onChatListRowUpdated,
+        sleep: readMarkerSleep,
+        markRead: readMarkerMarkRead
     )
     /// Cached `@`-mention autocomplete candidates and the generation pair they
     /// were built from. `mentionCandidates(for:)` runs on every composer
@@ -1009,6 +1014,10 @@ final class ConversationViewModel {
         timelineStore.isDeleted(messageIdHex)
     }
 
+    func deletionSource(for messageIdHex: String) -> DeletionSourceFfi {
+        timelineStore.deletedProjections.source(for: messageIdHex)
+    }
+
     func isEdited(_ messageIdHex: String) -> Bool {
         timelineStore.isEdited(messageIdHex)
     }
@@ -1156,7 +1165,10 @@ final class ConversationViewModel {
         timelineTimings: TimelineStoreTimings? = nil,
         composerMarmotCalls: ComposerMarmotCalls = .live,
         inviteDeclineCalls: InviteDeclineCalls = .live,
-        groupCalls: ConversationGroupCalls = .live
+        groupCalls: ConversationGroupCalls = .live,
+        agentRequestCalls: AgentRequestCalls = .live,
+        readMarkerSleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        readMarkerMarkRead: @escaping ConversationReadMarker.MarkReadHandler = ConversationReadMarker.defaultMarkRead
     ) {
         self.appState = appState
         self.moderationAccountRef = appState.activeAccountRef
@@ -1170,6 +1182,9 @@ final class ConversationViewModel {
         self.durableRetryOperations = durableRetryOperations
         self.inviteDeclineCalls = inviteDeclineCalls
         self.groupCalls = groupCalls
+        self.agentRequestCalls = agentRequestCalls
+        self.readMarkerSleep = readMarkerSleep
+        self.readMarkerMarkRead = readMarkerMarkRead
         let hiddenMessageIds = appState.activeAccountRef.map {
             MessageHideStore.hiddenMessageIds(accountRef: $0, groupIdHex: group.groupIdHex)
         } ?? []
@@ -1349,6 +1364,15 @@ final class ConversationViewModel {
             }
         ) else { return }
         readMarker.advanceWatermark(to: newest, isDeleted: false)
+    }
+
+    func markSubagentThreadMessagesRead(_ items: [TimelineItem]) {
+        let records = items.compactMap { item -> AppMessageRecordFfi? in
+            guard case .message(let record, _) = item.kind else { return nil }
+            return record
+        }
+        guard !records.isEmpty else { return }
+        markVisibleMessagesRead(records)
     }
 
     /// Advances the watermark to the newest eligible row in the loaded window.
@@ -2524,7 +2548,6 @@ final class ConversationViewModel {
         )
         await sendAgentRequest(
             key: AgentInteractionStore.itemKey(targetEventIdHex: projection.messageIdHex),
-            targetEventIdHex: projection.messageIdHex,
             summary: choice.label,
             payload: payload
         )
@@ -2552,7 +2575,6 @@ final class ConversationViewModel {
         )
         await sendAgentRequest(
             key: AgentInteractionStore.itemKey(targetEventIdHex: projection.messageIdHex),
-            targetEventIdHex: projection.messageIdHex,
             summary: containsSecret ? L10n.string("Answer sent") : summary,
             payload: payload
         )
@@ -2565,7 +2587,6 @@ final class ConversationViewModel {
         )
         await sendAgentRequest(
             key: AgentInteractionStore.stopKey(agentPubkeyHex: agentPubkeyHex, targetEventIdHex: targetEventIdHex),
-            targetEventIdHex: targetEventIdHex,
             summary: L10n.string("Stop"),
             payload: payload
         )
@@ -2575,7 +2596,6 @@ final class ConversationViewModel {
         let payload = AgentRequestBuilder.newSession(agentPubkeyHex: agentPubkeyHex)
         await sendAgentRequest(
             key: AgentInteractionStore.newSessionKey(agentPubkeyHex: agentPubkeyHex),
-            targetEventIdHex: nil,
             summary: L10n.string("New session"),
             payload: payload
         )
@@ -2594,7 +2614,6 @@ final class ConversationViewModel {
         )
         await sendAgentRequest(
             key: AgentInteractionStore.setSettingKey(agentPubkeyHex: agentPubkeyHex, settingId: setting.id),
-            targetEventIdHex: nil,
             summary: "\(setting.label): \(value)",
             payload: payload
         )
@@ -2611,83 +2630,42 @@ final class ConversationViewModel {
         )
         await sendAgentRequest(
             key: AgentInteractionStore.ownActionKey(agentPubkeyHex: agentPubkeyHex, actionId: action.id),
-            targetEventIdHex: nil,
             summary: action.label,
             payload: payload
         )
     }
 
-    @ObservationIgnored var agentCustomEventSendOverride: AgentInteractionStore.SendCustomEventOperation?
-    @ObservationIgnored var agentLocalSendStatusOverride: AgentInteractionStore.LocalSendStatusOperation?
-
     func recheckAgentRequestStatus(forKey key: String) async {
-        if let override = agentLocalSendStatusOverride {
-            _ = await agentInteractions.recheckStatus(forKey: key, checkStatus: override)
-            return
-        }
         guard let appState,
-              let accountRef = appState.activeAccountRef,
-              let client = try? appState.currentMarmotClient() else { return }
+              let accountRef = appState.activeAccountRef else { return }
         let groupIdHex = group.groupIdHex
+        let calls = agentRequestCalls
         _ = await agentInteractions.recheckStatus(forKey: key) { token in
-            try await client.localSendStatus(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex,
-                clientToken: token
-            )
+            try await calls.localSendStatus(appState, accountRef, groupIdHex, token)
         }
     }
 
     private func sendAgentRequest(
         key: String,
-        targetEventIdHex: String?,
         summary: String,
         payload: AgentRequestPayload
     ) async {
-        _ = targetEventIdHex
-        guard let appState else { return }
-        let senderId = myAccountId ?? ""
-        if let sendOverride = agentCustomEventSendOverride {
-            do {
-                _ = try await agentInteractions.submit(
-                    key: key,
-                    summary: summary,
-                    senderAccountIdHex: senderId,
-                    payload: payload,
-                    checkStatus: agentLocalSendStatusOverride,
-                    send: sendOverride
-                )
-            } catch {
-                appState.present(UserFacingError.toast(title: L10n.string("Couldn't send action"), error: error))
-            }
-            return
-        }
-        guard let accountRef = appState.activeAccountRef,
-              !senderId.isEmpty else { return }
+        guard let appState,
+              let accountRef = appState.activeAccountRef,
+              let senderId = myAccountId else { return }
         let groupIdHex = group.groupIdHex
+        let calls = agentRequestCalls
         do {
-            let client = try appState.currentMarmotClient()
             _ = try await agentInteractions.submit(
                 key: key,
                 summary: summary,
                 senderAccountIdHex: senderId,
                 payload: payload,
                 checkStatus: { token in
-                    try await client.localSendStatus(
-                        accountRef: accountRef,
-                        groupIdHex: groupIdHex,
-                        clientToken: token
-                    )
+                    try await calls.localSendStatus(appState, accountRef, groupIdHex, token)
                 }
             ) { request, token in
-                try await client.sendCustomEventWithClientToken(
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex,
-                    kind: request.kind,
-                    tags: request.tags,
-                    content: request.content,
-                    clientToken: token
-                )
+                try await calls.sendCustomEvent(appState, accountRef, groupIdHex, request, token)
             }
         } catch {
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't send action"), error: error))

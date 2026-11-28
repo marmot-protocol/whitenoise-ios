@@ -2,6 +2,37 @@ import Foundation
 import Observation
 import MarmotKit
 
+/// The Marmot calls `ConversationViewModel` makes to send kind-1202 agent
+/// answers/controls and to read back uncertain admissions.
+nonisolated struct AgentRequestCalls: Sendable {
+    var sendCustomEvent: @MainActor (
+        AppState, _ accountRef: String, _ groupIdHex: String, _ payload: AgentRequestPayload, _ clientToken: String
+    ) async throws -> LocalSendAcceptanceFfi
+    var localSendStatus: @MainActor (
+        AppState, _ accountRef: String, _ groupIdHex: String, _ clientToken: String
+    ) async throws -> LocalSendStatusFfi?
+
+    static let live = AgentRequestCalls(
+        sendCustomEvent: { appState, accountRef, groupIdHex, payload, clientToken in
+            try await appState.currentMarmotClient().sendCustomEventWithClientToken(
+                accountRef: accountRef,
+                groupIdHex: groupIdHex,
+                kind: payload.kind,
+                tags: payload.tags,
+                content: payload.content,
+                clientToken: clientToken
+            )
+        },
+        localSendStatus: { appState, accountRef, groupIdHex, clientToken in
+            try await appState.currentMarmotClient().localSendStatus(
+                accountRef: accountRef,
+                groupIdHex: groupIdHex,
+                clientToken: clientToken
+            )
+        }
+    )
+}
+
 /// Tracks in-flight and pending kind-1202 answers and controls for a conversation,
 /// enforcing `docs/design/answers-and-controls.md`:
 /// - An answer or control stays pending until a later version of some item

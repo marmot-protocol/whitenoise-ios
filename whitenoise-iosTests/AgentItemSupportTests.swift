@@ -710,24 +710,41 @@ struct AgentItemSupportTests {
     @MainActor
     @Test func viewModelRechecksAmbiguousAgentRequestUsingOriginalTokenAndRecoversOnRejection() async throws {
         let appState = AppState.test()
-        let viewModel = ConversationViewModel(appState: appState, group: group(name: "Agent Chat", id: hex("bb")))
+        let me = hex("22")
+        appState.accountStore.accounts = [
+            AccountSummaryFfi(label: "acct-1", accountIdHex: me, localSigning: true, signedOut: false, running: true)
+        ]
+        appState.activeAccountRef = "acct-1"
+
         let agent = hex("aa")
         let key = AgentInteractionStore.newSessionKey(agentPubkeyHex: agent)
         var capturedTokens: [String] = []
         var probedTokens: [String] = []
         var statusToReturn: LocalSendStatusFfi?
 
-        viewModel.agentCustomEventSendOverride = { _, token in
-            capturedTokens.append(token)
-            if capturedTokens.count == 1 {
-                throw CancellationError()
+        let calls = AgentRequestCalls(
+            sendCustomEvent: { _, accountRef, groupIdHex, payload, token in
+                #expect(accountRef == "acct-1")
+                #expect(groupIdHex == hex("bb"))
+                #expect(payload.kind == MessageSemantics.kindAgentOperation)
+                capturedTokens.append(token)
+                if capturedTokens.count == 1 {
+                    throw CancellationError()
+                }
+                return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: hex("99"))
+            },
+            localSendStatus: { _, accountRef, groupIdHex, token in
+                #expect(accountRef == "acct-1")
+                #expect(groupIdHex == hex("bb"))
+                probedTokens.append(token)
+                return statusToReturn
             }
-            return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: hex("99"))
-        }
-        viewModel.agentLocalSendStatusOverride = { token in
-            probedTokens.append(token)
-            return statusToReturn
-        }
+        )
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: group(name: "Agent Chat", id: hex("bb")),
+            agentRequestCalls: calls
+        )
 
         await viewModel.sendAgentNewSession(agentPubkeyHex: agent)
         let firstToken = try #require(capturedTokens.first)
@@ -746,6 +763,227 @@ struct AgentItemSupportTests {
         await viewModel.sendAgentNewSession(agentPubkeyHex: agent)
         #expect(capturedTokens.count == 2)
         #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.requestEventIdHex == hex("99"))
+    }
+
+    @MainActor
+    @Test(.marmotRuntimeConcurrencyLimit)
+    func subagentThreadReadMarksAdvanceWatermarkForHiddenKind1111Replies() async throws {
+        try await withTestClient { client in
+            let appState = AppState.test(
+                client: client,
+                notifications: AppNotifications(
+                    deliveredNotificationDescriptorsProvider: { [] },
+                    pendingNotificationRequestsRemover: { _ in },
+                    deliveredNotificationIdentifiersRemover: { _ in }
+                )
+            )
+            appState.activeAccountRef = "acct-1"
+
+            let sleeper = ControlledSleeper()
+            var markedIds: [String] = []
+            let viewModel = ConversationViewModel(
+                appState: appState,
+                group: group(name: "Codex", id: hex("bb")),
+                readMarkerSleep: { try await sleeper.sleep($0) },
+                readMarkerMarkRead: { _, _, _, ids in
+                    markedIds.append(contentsOf: ids)
+                    return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
+                }
+            )
+
+            let agent = hex("aa")
+            let mainMsgId = hex("10")
+            let taskId = hex("20")
+            let childReplyId = hex("30")
+            let threadRef = TimelineThreadRefFfi(rootMessageIdHex: taskId, parentMessageIdHex: taskId)
+
+            let mainMsg = timelineRecord(
+                messageIdHex: mainMsgId,
+                groupIdHex: hex("bb"),
+                sender: agent,
+                plaintext: "Starting work",
+                kind: MessageSemantics.kindChat,
+                timelineAt: 10
+            )
+            let taskRecord = timelineRecord(
+                messageIdHex: taskId,
+                groupIdHex: hex("bb"),
+                sender: agent,
+                plaintext: "Explore repo",
+                kind: MessageSemantics.kindAgentActivity,
+                timelineAt: 20,
+                agentItem: makeAgentItem(
+                    itemId: "task:sub1",
+                    itemType: "task",
+                    state: .running,
+                    title: "Subagent",
+                    fieldsJson: #"{"type":"task","body":{"kind":"subagent","description":"Explore repo"}}"#
+                )
+            )
+            let childReply = timelineRecord(
+                messageIdHex: childReplyId,
+                groupIdHex: hex("bb"),
+                sender: agent,
+                plaintext: "Found the root cause.",
+                kind: MessageSemantics.kindComment,
+                tags: [
+                    MessageTagFfi(values: ["E", taskId, "", agent]),
+                    MessageTagFfi(values: ["K", "1201"]),
+                    MessageTagFfi(values: ["P", agent]),
+                    MessageTagFfi(values: ["e", taskId, "", agent]),
+                    MessageTagFfi(values: ["k", "1201"]),
+                ],
+                timelineAt: 30,
+                thread: threadRef
+            )
+
+            viewModel.applyTimelinePage(
+                TimelinePageFfi(messages: [mainMsg, taskRecord, childReply], hasMoreBefore: false, hasMoreAfter: false),
+                placement: .window
+            )
+
+            // Main timeline hides the subagent reply, so tail marking stops at mainMsgId.
+            viewModel.markConversationReadThroughTail()
+            try await eventually { sleeper.sleepingCount == 1 }
+            sleeper.releaseAll()
+            try await eventually { markedIds == [mainMsgId] && sleeper.sleepingCount == 0 }
+
+            // Viewing rows inside the subagent thread advances the read watermark to childReplyId.
+            let threadItems = viewModel.subagentThreadItems(forTaskMessageId: taskId)
+            #expect(threadItems.count == 1)
+            viewModel.markSubagentThreadMessagesRead(threadItems)
+            try await eventually { sleeper.sleepingCount == 1 }
+            sleeper.releaseAll()
+            try await eventually { markedIds == [mainMsgId, childReplyId] && sleeper.sleepingCount == 0 }
+        }
+    }
+
+    @MainActor
+    @Test func subagentThreadDeletedKind1111ReplyUsesDeletionPresentation() {
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: group(name: "Codex", id: hex("bb")))
+        let agent = hex("aa")
+        let taskId = hex("20")
+        let childReplyId = hex("31")
+        let threadRef = TimelineThreadRefFfi(rootMessageIdHex: taskId, parentMessageIdHex: taskId)
+
+        let taskRecord = timelineRecord(
+            messageIdHex: taskId,
+            groupIdHex: hex("bb"),
+            sender: agent,
+            plaintext: "Audit logs",
+            kind: MessageSemantics.kindAgentActivity,
+            timelineAt: 10,
+            agentItem: makeAgentItem(
+                itemId: "task:sub1",
+                itemType: "task",
+                state: .done,
+                title: "Subagent",
+                fieldsJson: #"{"type":"task","body":{"kind":"subagent","description":"Audit logs"}}"#
+            )
+        )
+        let activeReply = timelineRecord(
+            messageIdHex: childReplyId,
+            groupIdHex: hex("bb"),
+            sender: agent,
+            plaintext: "sensitive output",
+            kind: MessageSemantics.kindComment,
+            tags: [
+                MessageTagFfi(values: ["E", taskId, "", agent]),
+                MessageTagFfi(values: ["K", "1201"]),
+                MessageTagFfi(values: ["P", agent]),
+                MessageTagFfi(values: ["e", taskId, "", agent]),
+                MessageTagFfi(values: ["k", "1201"]),
+            ],
+            timelineAt: 20,
+            thread: threadRef
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [taskRecord, activeReply], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        #expect(!viewModel.isDeleted(childReplyId))
+
+        var authorDeletedReply = activeReply
+        authorDeletedReply.deleted = true
+        authorDeletedReply.deletionSource = .author
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [taskRecord, authorDeletedReply], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        #expect(viewModel.isDeleted(childReplyId))
+        #expect(viewModel.deletionSource(for: childReplyId) == .author)
+        #expect(
+            MessageDeletionPresentation.bubbleText(
+                source: viewModel.deletionSource(for: childReplyId),
+                isFromMe: false
+            ) == L10n.string("This message was deleted.")
+        )
+        #expect(
+            MessageDeletionPresentation.bubbleText(
+                source: viewModel.deletionSource(for: childReplyId),
+                isFromMe: true
+            ) == L10n.string("You deleted this message.")
+        )
+
+        var adminDeletedReply = activeReply
+        adminDeletedReply.deleted = true
+        adminDeletedReply.deletionSource = .admin
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [taskRecord, adminDeletedReply], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        #expect(viewModel.isDeleted(childReplyId))
+        #expect(viewModel.deletionSource(for: childReplyId) == .admin)
+        #expect(
+            MessageDeletionPresentation.bubbleText(
+                source: viewModel.deletionSource(for: childReplyId),
+                isFromMe: false
+            ) == L10n.string("This message was deleted by an admin.")
+        )
+    }
+
+    @MainActor
+    @Test func kind9SettlesTagSettlesPendingAgentRequestWithoutKind1201InWindow() async throws {
+        let appState = AppState.test()
+        let me = hex("22")
+        appState.accountStore.accounts = [
+            AccountSummaryFfi(label: "acct-1", accountIdHex: me, localSigning: true, signedOut: false, running: true)
+        ]
+        appState.activeAccountRef = "acct-1"
+
+        let agent = hex("aa")
+        let reqId = hex("91")
+        let key = AgentInteractionStore.newSessionKey(agentPubkeyHex: agent)
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: group(name: "Agent Chat", id: hex("bb")),
+            agentRequestCalls: AgentRequestCalls(
+                sendCustomEvent: { _, _, _, _, token in
+                    LocalSendAcceptanceFfi(clientToken: token, messageIdHex: reqId)
+                },
+                localSendStatus: { _, _, _, _ in nil }
+            )
+        )
+
+        await viewModel.sendAgentNewSession(agentPubkeyHex: agent)
+        #expect(viewModel.agentInteractions.isPending(key: key))
+
+        // A timeline window containing zero kind-1201 items still settles via kind-9 `settles` tag.
+        let reply = timelineRecord(
+            messageIdHex: hex("92"),
+            groupIdHex: hex("bb"),
+            sender: agent,
+            plaintext: "Started a fresh session.",
+            kind: MessageSemantics.kindChat,
+            tags: [MessageTagFfi(values: ["settles", reqId])],
+            timelineAt: 50
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [reply], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        #expect(!viewModel.agentInteractions.isPending(key: key))
     }
 
     @MainActor
