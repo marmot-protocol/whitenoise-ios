@@ -10,12 +10,16 @@ extension MarmotClient {
     /// Builds a MarmotClient pointed at a unique temp directory so unit tests
     /// stay hermetic. The caller owns the runtime; prefer `withTestClient`,
     /// which closes it and removes the directory.
-    static func testClient(relayUrls: [String] = unreachableTestRelays) throws -> MarmotClient {
+    static func testClient(
+        relayUrls: [String] = unreachableTestRelays,
+        attachmentPolicyBridge: AttachmentPolicyBridge = AttachmentPolicyBridge()
+    ) throws -> MarmotClient {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("MarmotTests-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
         do {
-            return try MarmotClient(rootPath: tmp.path, relayUrls: relayUrls)
+            return try MarmotClient(rootPath: tmp.path, relayUrls: relayUrls,
+                                    attachmentPolicyBridge: attachmentPolicyBridge)
         } catch {
             try? FileManager.default.removeItem(at: tmp)
             throw error

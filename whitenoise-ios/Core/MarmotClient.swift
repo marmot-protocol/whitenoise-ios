@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import Synchronization
 @preconcurrency import MarmotKit
 
 nonisolated struct TimelineReadMarkResult {
@@ -51,6 +52,11 @@ nonisolated final class MarmotClient: Sendable {
     let cursorPersistence: CursorPersistenceFfi
     let productConfig: ProductAnalyticsBuildConfig
     let telemetryConfig: TelemetryBuildConfig
+    private let attachmentPolicyBridgeStorage: Mutex<AttachmentPolicyBridge>
+
+    var attachmentPolicyBridge: AttachmentPolicyBridge {
+        attachmentPolicyBridgeStorage.withLock { $0 }
+    }
 
     convenience init() throws {
         try self.init(rootPath: AppContainerConfig.productionMarmotRoot().path, relayUrls: Self.seedRelays)
@@ -65,13 +71,15 @@ nonisolated final class MarmotClient: Sendable {
     convenience init(
         rootPath: String,
         relayUrls: [String],
-        cursorPersistence: CursorPersistenceFfi = .advance
+        cursorPersistence: CursorPersistenceFfi = .advance,
+        attachmentPolicyBridge: AttachmentPolicyBridge = .shared
     ) throws {
         try self.init(
             rootPath: rootPath,
             relayUrls: relayUrls,
             cursorPersistence: cursorPersistence,
-            telemetryConfig: TelemetryBuildConfig.current()
+            telemetryConfig: TelemetryBuildConfig.current(),
+            attachmentPolicyBridge: attachmentPolicyBridge
         )
     }
 
@@ -79,13 +87,15 @@ nonisolated final class MarmotClient: Sendable {
         rootPath: String,
         relayUrls: [String],
         cursorPersistence: CursorPersistenceFfi,
-        telemetryConfig: TelemetryBuildConfig
+        telemetryConfig: TelemetryBuildConfig,
+        attachmentPolicyBridge: AttachmentPolicyBridge = .shared
     ) throws {
         let constructionStartedAt = ContinuousClock.now
         self.rootPath = rootPath
         self.relayUrls = relayUrls
         self.cursorPersistence = cursorPersistence
         self.telemetryConfig = telemetryConfig
+        self.attachmentPolicyBridgeStorage = Mutex(attachmentPolicyBridge)
         self.productConfig = .current()
         // Every MarmotKit constructor opens with device groups (multi-device) on.
         self.marmot = try Marmot.newWithConfiguration(
@@ -132,7 +142,22 @@ nonisolated final class MarmotClient: Sendable {
     }
 
     func freshRuntime() throws -> MarmotClient {
-        try MarmotClient(rootPath: rootPath, relayUrls: relayUrls, cursorPersistence: cursorPersistence)
+        try MarmotClient(rootPath: rootPath, relayUrls: relayUrls, cursorPersistence: cursorPersistence,
+                         attachmentPolicyBridge: attachmentPolicyBridge)
+    }
+
+    /// The lifecycle binds factory-created clients to its owner before startup.
+    /// Keep the reference synchronized because clients also start off MainActor.
+    @MainActor
+    func bindAttachmentPolicyBridge(_ bridge: AttachmentPolicyBridge) {
+        let previous = attachmentPolicyBridgeStorage.withLock { current in
+            let previous = current
+            current = bridge
+            return previous
+        }
+        if previous !== bridge {
+            previous.detach(client: self)
+        }
     }
 
     /// Lists local accounts off the main actor. `Marmot.listAccounts()` is a
@@ -1218,14 +1243,15 @@ nonisolated final class MarmotClient: Sendable {
     }
 
     func startRuntime() async throws {
+        let attachmentPolicyBridge = attachmentPolicyBridge
         // Optional exporters cannot turn missing consent/configuration into a startup failure.
         try? await configureTelemetryRuntime()
         try? await configureProductAnalytics()
-        try await AttachmentPolicyBridge.shared.synchronize(self, beforeStart: true)
+        try await attachmentPolicyBridge.synchronize(self, beforeStart: true)
         do {
             try await marmot.start()
         } catch {
-            _ = await AttachmentPolicyBridge.shared.detach(client: self)
+            _ = await attachmentPolicyBridge.detach(client: self)
             throw error
         }
     }

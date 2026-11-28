@@ -8,7 +8,8 @@ extension AppState {
     ///   erasure recovery gets a second one;
     /// - conversation and sign-up drafts live in temporary directories;
     /// - notifications go through a fresh `AppNotifications` instead of
-    ///   `.shared`.
+    ///   `.shared`;
+    /// - attachment policy uses one fresh bridge across runtime rebuilds.
     /// The suites and directories are removed when the state is released.
     ///
     /// Not isolated:
@@ -27,6 +28,7 @@ extension AppState {
     static func test(
         client: MarmotClient? = nil,
         notifications: AppNotifications? = nil,
+        attachmentPolicyBridge: AttachmentPolicyBridge = AttachmentPolicyBridge(),
         conversationDraftStore: ConversationDraftStore? = nil,
         signUpDraftStore: SignUpDraftStore? = nil,
         accountDefaults: UserDefaults? = nil,
@@ -51,6 +53,7 @@ extension AppState {
         let state = AppState(
             client: client,
             notifications: notifications ?? AppNotifications(),
+            attachmentPolicyBridge: attachmentPolicyBridge,
             conversationDraftStore: conversationDraftStore ?? ConversationDraftStore(
                 legacyFileURL: resources.makeDirectory("ConversationDraftTests")
                     .appendingPathComponent("conversation-drafts.json", isDirectory: false)

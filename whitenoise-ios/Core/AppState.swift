@@ -704,6 +704,7 @@ final class AppState {
     init(
         client: MarmotClient?,
         notifications: AppNotifications,
+        attachmentPolicyBridge: AttachmentPolicyBridge? = nil,
         conversationDraftStore: ConversationDraftStore? = nil,
         signUpDraftStore: SignUpDraftStore? = nil,
         accountDefaults: UserDefaults = .standard,
@@ -739,6 +740,7 @@ final class AppState {
         self.runtimeLifecycle = RuntimeLifecycle(
             client: client,
             suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig,
+            attachmentPolicyBridge: attachmentPolicyBridge,
             runtimeClientFactory: runtimeClientFactory,
             runtimeStarter: runtimeStarter,
             runtimeCloser: runtimeCloser,
@@ -1378,17 +1380,20 @@ final class AppState {
     }
 
     @MainActor
+    var attachmentPolicyBridge: AttachmentPolicyBridge { runtimeLifecycle.attachmentPolicyBridge }
+
+    @MainActor
     var allowsAutomaticAttachmentPolicySync: Bool {
         canUseLiveRuntime && isCurrentClientStarted && !blocksAccountWork
     }
 
     @MainActor
     func synchronizeAutomaticAttachmentPolicyIfAllowed(
-        bridge: AttachmentPolicyBridge = .shared
+        bridge: AttachmentPolicyBridge? = nil
     ) async throws {
         guard allowsAutomaticAttachmentPolicySync,
               let client = try? currentMarmotClient() else { return }
-        try await bridge.synchronize(client)
+        try await (bridge ?? attachmentPolicyBridge).synchronize(client)
     }
 
     func eraseAppData() async throws {
@@ -1401,7 +1406,7 @@ final class AppState {
         isSigningOut = true
         // Detach the attachment bridge synchronously before the first `await` so
         // `NWPathMonitor` network changes cannot grant permissions mid-drain.
-        let attachmentPolicyTail = AttachmentPolicyBridge.shared.detach(client: erasingClient)
+        let attachmentPolicyTail = attachmentPolicyBridge.detach(client: erasingClient)
         AvatarCacheErasure.begin()
         defer {
             AvatarCacheErasure.end()
@@ -1416,7 +1421,7 @@ final class AppState {
             await appReviewDemo.resetForErasure()
             await runtimeLifecycle.prepareForAppErasure()
             _ = try? await attachmentPolicyTail?.value
-            await AttachmentPolicyBridge.shared.revokeAndDetach(client: erasingClient)
+            await attachmentPolicyBridge.revokeAndDetach(client: erasingClient)
             let stored = try await erasingClient.listAccounts()
             for account in stored {
                 _ = try? await erasingClient.marmot.clearPushRegistration(accountRef: account.label)

@@ -46,7 +46,7 @@ extension MediaAutoDownloadStore: AttachmentPermissionSource {}
 /// Revokes in event order; obsolete policy evaluations never grant a newer generation.
 @MainActor
 final class AttachmentPolicyBridge {
-    static let shared = AttachmentPolicyBridge()
+    nonisolated static let shared = AttachmentPolicyBridge()
 
     /// The runtime currently targeted by `synchronize`. Not exposed to
     /// `NWPathMonitor`'s `policyDidChange()` until `clientAcceptsPolicyChanges`
@@ -60,11 +60,13 @@ final class AttachmentPolicyBridge {
     private var detachEpoch: UInt64 = 0
     private var policyTail: Task<Void, Error>?
     private var revocationTail: Task<[(AccountSummaryFfi, String)], Error>?
-    private let permissions: @MainActor () -> any AttachmentPermissionSource
+    private let permissions: @MainActor @Sendable () -> any AttachmentPermissionSource
 
     /// `permissions` is read per event so the shared bridge and
     /// `MediaAutoDownloadStore.shared` can refer to each other.
-    init(permissions: @escaping @MainActor () -> any AttachmentPermissionSource = { MediaAutoDownloadStore.shared }) {
+    nonisolated init(
+        permissions: @escaping @MainActor @Sendable () -> any AttachmentPermissionSource = { MediaAutoDownloadStore.shared }
+    ) {
         self.permissions = permissions
     }
 

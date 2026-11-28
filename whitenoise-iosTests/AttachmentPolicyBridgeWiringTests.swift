@@ -19,6 +19,32 @@ struct AttachmentPolicyBridgeWiringTests {
     private static let dave = accountSummary("dave", byte: "dd")
     private static let erin = accountSummary("erin", byte: "ee")
 
+    /// Separate app owners must not share the cancellation epoch, even while
+    /// one startup is parked and the other owner finishes and detaches.
+    @Test func independentAppStatesDoNotCancelEachOthersStartupSync() async throws {
+        let firstState = AppState.test()
+        let secondState = AppState.test()
+        let first = FakeAttachmentRuntime(accounts: [Self.alice], stored: attachmentPolicy(automatic: false))
+        let second = FakeAttachmentRuntime(accounts: [Self.bob])
+        let hold = first.hold(.listing)
+        defer { hold.release.signal() }
+        let startup = try await start(firstState.attachmentPolicyBridge, first, beforeStart: true)
+        try await hold.entered.wait()
+
+        let otherStartup = try await start(secondState.attachmentPolicyBridge, second, beforeStart: true)
+        let detached = secondState.attachmentPolicyBridge.detach(client: second)
+        hold.release.signal()
+        _ = try? await detached?.value
+        do { try await otherStartup.value } catch is CancellationError {}
+        try await startup.value
+
+        #expect(first.writes.map(\.policy.automatic) == [true])
+        #expect(first.grants.isEmpty)
+        try await firstState.attachmentPolicyBridge.synchronize(first)
+        #expect(firstState.attachmentPolicyBridge.isAttached(to: first))
+        #expect(first.grants.map(\.account) == [Self.alice.accountIdHex])
+    }
+
     @Test func eachGrantForwardsTheGenerationItsEventBeganAndTheCapturedPermission() async throws {
         let runtime = FakeAttachmentRuntime(accounts: [Self.alice, Self.bob])
         let permissions = FakePermissionSource()
@@ -574,12 +600,13 @@ struct AttachmentPolicyBridgeWiringTests {
     /// the signal, before its first suspension.
     private func start(
         _ bridge: AttachmentPolicyBridge, _ runtime: FakeAttachmentRuntime,
+        beforeStart: Bool = false,
         updatedLimits: (account: String, policy: AttachmentDownloadPolicyFfi)? = nil
     ) async throws -> Task<Void, any Error> {
         let scheduled = TestLatch()
         let task = Task { @MainActor in
             scheduled.signal()
-            try await bridge.synchronize(runtime, updatedLimits: updatedLimits)
+            try await bridge.synchronize(runtime, beforeStart: beforeStart, updatedLimits: updatedLimits)
         }
         try await scheduled.wait()
         return task
@@ -588,6 +615,51 @@ struct AttachmentPolicyBridgeWiringTests {
 
 @MainActor
 struct AttachmentPolicyBridgeRuntimeStartupTests {
+    @Test(.marmotRuntimeConcurrencyLimit, .closesTestRuntimes, arguments: [false, true])
+    func startupRebuildAndFreshRuntimeUseTheOwnersBridge(customFactory: Bool) async throws {
+        let initial = try TestRuntimeScope.own(MarmotClient.testClient(), ownsRoot: true)
+        let bridge = AttachmentPolicyBridge(permissions: { FakePermissionSource() })
+        let factory: RuntimeLifecycle.RuntimeClientFactory
+        if customFactory {
+            factory = { rootPath, relayUrls, cursorPersistence, telemetryConfig in
+                try MarmotClient(rootPath: rootPath, relayUrls: relayUrls, cursorPersistence: cursorPersistence,
+                                 telemetryConfig: telemetryConfig, attachmentPolicyBridge: AttachmentPolicyBridge())
+            }
+        } else {
+            factory = RuntimeLifecycle.defaultRuntimeClientFactory
+        }
+        let state = try TestRuntimeScope.own(AppState.test(
+            client: initial, attachmentPolicyBridge: bridge, runtimeClientFactory: factory
+        ))
+        state.setAppSceneActive(true)
+        await state.bootstrap()
+        #expect(state.isCurrentClientStarted)
+
+        // A before-start pass leaves a drainable tail on the owner's bridge,
+        // even with no accounts. This catches startup using another bridge.
+        let initialTail = try #require(bridge.detach(client: initial))
+        try await initialTail.value
+        try await state.synchronizeAutomaticAttachmentPolicyIfAllowed()
+        #expect(bridge.isAttached(to: initial))
+
+        await state.startRuntimeSuspension().value
+        #expect(!bridge.isAttached(to: initial))
+        await state.startForegroundActivation().value
+        let restored = try #require(state.client)
+        #expect(state.isCurrentClientStarted)
+        let restoredTail = try #require(bridge.detach(client: restored))
+        try await restoredTail.value
+        try await state.synchronizeAutomaticAttachmentPolicyIfAllowed()
+        #expect(bridge.isAttached(to: restored))
+
+        await state.startRuntimeSuspension().value
+        #expect(!bridge.isAttached(to: restored))
+        let fresh = try TestRuntimeScope.own(restored.freshRuntime())
+        try await fresh.startRuntime()
+        let freshTail = try #require(bridge.detach(client: fresh))
+        try await freshTail.value
+    }
+
     @Test(.marmotRuntimeConcurrencyLimit)
     func isCurrentClientStartedStaysFalseUntilRuntimeStartupCompletes() async throws {
         try await withTestClient { initialClient in

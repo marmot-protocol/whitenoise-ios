@@ -169,6 +169,7 @@ final class RuntimeLifecycle {
     @ObservationIgnored private let runtimeRelayUrls: [String]
     @ObservationIgnored private let suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig
     @ObservationIgnored private let runtimeClientFactory: RuntimeClientFactory
+    @ObservationIgnored let attachmentPolicyBridge: AttachmentPolicyBridge
     @ObservationIgnored private let runtimeStarter: RuntimeStarter
     @ObservationIgnored private let runtimeCloser: RuntimeCloser
     @ObservationIgnored private let retrySleeper: RetrySleeper
@@ -266,6 +267,7 @@ final class RuntimeLifecycle {
     init(
         client: MarmotClient?,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig,
+        attachmentPolicyBridge: AttachmentPolicyBridge? = nil,
         runtimeClientFactory: @escaping RuntimeClientFactory = RuntimeLifecycle.defaultRuntimeClientFactory,
         runtimeStarter: @escaping RuntimeStarter = RuntimeLifecycle.defaultRuntimeStarter,
         runtimeCloser: @escaping RuntimeCloser = RuntimeLifecycle.defaultRuntimeCloser,
@@ -275,6 +277,9 @@ final class RuntimeLifecycle {
         hostPerformanceRecorder: @escaping HostPerformanceRecorder = RuntimeLifecycle.recordHostPerformanceOnClient
     ) {
         self.client = client
+        let attachmentPolicyBridge = attachmentPolicyBridge ?? client?.attachmentPolicyBridge ?? .shared
+        self.attachmentPolicyBridge = attachmentPolicyBridge
+        client?.bindAttachmentPolicyBridge(attachmentPolicyBridge)
         self.runtimeRootPath = client?.rootPath
         self.runtimeRelayUrls = client?.relayUrls ?? MarmotClient.seedRelays
         self.suspendedRuntimeTelemetryBuildConfig = suspendedRuntimeTelemetryBuildConfig
@@ -416,12 +421,14 @@ final class RuntimeLifecycle {
             try Task.checkCancellation()
             guard stillOwnsWork() else { throw CancellationError() }
             do {
-                return try await runtimeClientFactory(
+                let restored = try await runtimeClientFactory(
                     rootPath,
                     relayUrls,
                     cursorPersistence,
                     telemetryConfig
                 )
+                restored.bindAttachmentPolicyBridge(attachmentPolicyBridge)
+                return restored
             } catch let error as MarmotKitError where error.isTransientStartupReadinessFailure {
                 guard retryOnTransientReadiness,
                       stillOwnsWork(),
@@ -771,7 +778,7 @@ final class RuntimeLifecycle {
                 runtimeSuspendedForBackground = true
                 finishBackgroundStorageClose()
             }
-            let policyTail = AttachmentPolicyBridge.shared.detach(client: clientToClose)
+            let policyTail = self.attachmentPolicyBridge.detach(client: clientToClose)
             do {
                 try await runtimeCloser(clientToClose)
                 _ = try? await policyTail?.value
@@ -827,7 +834,7 @@ final class RuntimeLifecycle {
         client = nil
         startedClientID = nil
         guard let clientToRelease else { return nil }
-        let policyTail = AttachmentPolicyBridge.shared.detach(client: clientToRelease)
+        let policyTail = self.attachmentPolicyBridge.detach(client: clientToRelease)
         try? await runtimeCloser(clientToRelease)
         if awaitPolicyTail {
             _ = try? await policyTail?.value
@@ -1182,7 +1189,7 @@ final class RuntimeLifecycle {
                 }
 #endif
                 guard ownsForegroundActivation(id: activationID) else {
-                    AttachmentPolicyBridge.shared.detach(client: restored)
+                    self.attachmentPolicyBridge.detach(client: restored)
                     try? await runtimeCloser(restored)
                     return
                 }
@@ -1198,7 +1205,7 @@ final class RuntimeLifecycle {
                             guard ownsForegroundActivation(id: activationID),
                                   retryIndex < constructionRetryPolicy.delays.count
                             else { throw error }
-                            AttachmentPolicyBridge.shared.detach(client: restored)
+                            self.attachmentPolicyBridge.detach(client: restored)
                             try? await runtimeCloser(restored)
                             let delay = constructionRetryPolicy.delays[retryIndex]
                             retryIndex += 1
@@ -1222,7 +1229,7 @@ final class RuntimeLifecycle {
                             outcome: .failure
                         )
                     }
-                    AttachmentPolicyBridge.shared.detach(client: restored)
+                    self.attachmentPolicyBridge.detach(client: restored)
                     try? await runtimeCloser(restored)
                     if ownsForegroundActivation(id: activationID) {
                         appState?.stopNotificationSubscription()
@@ -1232,7 +1239,7 @@ final class RuntimeLifecycle {
                     return
                 }
                 guard ownsForegroundActivation(id: activationID) else {
-                    AttachmentPolicyBridge.shared.detach(client: restored)
+                    self.attachmentPolicyBridge.detach(client: restored)
                     try? await runtimeCloser(restored)
                     return
                 }
@@ -1257,7 +1264,7 @@ final class RuntimeLifecycle {
                         client = nil
                         startedClientID = nil
                     }
-                    AttachmentPolicyBridge.shared.detach(client: restored)
+                    self.attachmentPolicyBridge.detach(client: restored)
                     try? await runtimeCloser(restored)
                     if ownsForegroundActivation(id: activationID), !(error is CancellationError) {
                         appState?.setPhase(.failed(UserFacingError.message(for: error)))
@@ -1316,14 +1323,14 @@ final class RuntimeLifecycle {
             }
             if isCurrentClientStarted,
                let client,
-               !AttachmentPolicyBridge.shared.isAttached(to: client) {
+               !self.attachmentPolicyBridge.isAttached(to: client) {
                 Task { @MainActor [weak self] in
                     guard let self,
                           self.client === client,
                           self.isCurrentClientStarted,
                           self.canUseLiveRuntime
                     else { return }
-                    _ = try? await AttachmentPolicyBridge.shared.synchronize(client)
+                    _ = try? await self.attachmentPolicyBridge.synchronize(client)
                 }
             }
         }
@@ -1636,7 +1643,7 @@ final class RuntimeLifecycle {
 
         if !lease.ownsEphemeralRuntime,
            client.map(ObjectIdentifier.init) == lease.clientIdentity {
-            AttachmentPolicyBridge.shared.detach(client: clientToClose)
+            self.attachmentPolicyBridge.detach(client: clientToClose)
             client = nil
             startedClientID = nil
         }
