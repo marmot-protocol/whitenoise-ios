@@ -122,9 +122,8 @@ struct ConversationTimelineProjectionTests {
     }
 
     @MainActor
-    private func readMarkerAppState(client: MarmotClient) -> AppState {
+    private func readMarkerAppState() -> AppState {
         AppState.test(
-            client: client,
             notifications: AppNotifications(
                 deliveredNotificationDescriptorsProvider: { [] },
                 pendingNotificationRequestsRemover: { _ in },
@@ -451,752 +450,719 @@ struct ConversationTimelineProjectionTests {
         #expect(candidate?.messageIdHex == memberRemoved.messageIdHex)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func readWatermarkRemainsMonotonicAfterFlushedMessageIsEvictedFromWindow() async throws {
-        try await withTestClient { client in
-            let appState = readMarkerAppState(client: client)
-            appState.activeAccountRef = "acct-1"
-            let sleeper = ControlledSleeper()
-            let older = message(id: hex("10"), kind: MessageSemantics.kindChat)
-            let newer = message(id: hex("20"), kind: MessageSemantics.kindChat)
-            let future = message(id: hex("30"), kind: MessageSemantics.kindChat)
-            var loadedKeys: [String: TimelineHistoryOrderKey] = [
-                older.messageIdHex: orderKey(older.messageIdHex, epoch: 1, timelineAt: 100),
-                newer.messageIdHex: orderKey(newer.messageIdHex, epoch: 2, timelineAt: 200),
-                future.messageIdHex: orderKey(future.messageIdHex, epoch: 2, timelineAt: 300),
-            ]
-            var markedIds: [String] = []
-            let marker = ConversationReadMarker(
-                groupIdHex: hex("aa"),
-                appState: appState,
-                orderKey: { loadedKeys[$0] },
-                onChatListRowUpdated: nil,
-                sleep: { try await sleeper.sleep($0) },
-                markRead: { _, _, _, ids in
-                    markedIds.append(contentsOf: ids)
-                    return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
-                }
-            )
+    @Test func readWatermarkRemainsMonotonicAfterFlushedMessageIsEvictedFromWindow() async throws {
+        let appState = readMarkerAppState()
+        appState.activeAccountRef = "acct-1"
+        let sleeper = ControlledSleeper()
+        let older = message(id: hex("10"), kind: MessageSemantics.kindChat)
+        let newer = message(id: hex("20"), kind: MessageSemantics.kindChat)
+        let future = message(id: hex("30"), kind: MessageSemantics.kindChat)
+        var loadedKeys: [String: TimelineHistoryOrderKey] = [
+            older.messageIdHex: orderKey(older.messageIdHex, epoch: 1, timelineAt: 100),
+            newer.messageIdHex: orderKey(newer.messageIdHex, epoch: 2, timelineAt: 200),
+            future.messageIdHex: orderKey(future.messageIdHex, epoch: 2, timelineAt: 300),
+        ]
+        var markedIds: [String] = []
+        let marker = ConversationReadMarker(
+            groupIdHex: hex("aa"),
+            appState: appState,
+            orderKey: { loadedKeys[$0] },
+            onChatListRowUpdated: nil,
+            sleep: { try await sleeper.sleep($0) },
+            markRead: { _, _, _, ids in
+                markedIds.append(contentsOf: ids)
+                return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
+            }
+        )
 
-            // Flush the newer watermark while it is in the loaded window.
-            marker.advanceWatermark(to: newer, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await eventually { markedIds == [newer.messageIdHex] && sleeper.sleepingCount == 0 }
+        // Flush the newer watermark while it is in the loaded window.
+        marker.advanceWatermark(to: newer, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await eventually { markedIds == [newer.messageIdHex] && sleeper.sleepingCount == 0 }
 
-            // Evict the flushed message from the bounded window (user scrolled far up).
-            loadedKeys.removeValue(forKey: newer.messageIdHex)
-            marker.advanceWatermark(to: older, isDeleted: false)
-            await Task.yield()
-            #expect(sleeper.requestedDelays.count == 1)
-            #expect(markedIds == [newer.messageIdHex])
+        // Evict the flushed message from the bounded window (user scrolled far up).
+        loadedKeys.removeValue(forKey: newer.messageIdHex)
+        marker.advanceWatermark(to: older, isDeleted: false)
+        await Task.yield()
+        #expect(sleeper.requestedDelays.count == 1)
+        #expect(markedIds == [newer.messageIdHex])
 
-            // A strictly newer message still advances the watermark.
-            marker.advanceWatermark(to: future, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await eventually { markedIds == [newer.messageIdHex, future.messageIdHex] && sleeper.sleepingCount == 0 }
-        }
+        // A strictly newer message still advances the watermark.
+        marker.advanceWatermark(to: future, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await eventually { markedIds == [newer.messageIdHex, future.messageIdHex] && sleeper.sleepingCount == 0 }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func seedFlushedWatermarkRatchetsForwardWhenAnotherDeviceReadsAhead() async throws {
-        try await withTestClient { client in
-            let appState = readMarkerAppState(client: client)
-            appState.activeAccountRef = "acct-1"
-            let older = message(id: hex("11"), kind: MessageSemantics.kindChat)
-            let mid = message(id: hex("22"), kind: MessageSemantics.kindChat)
-            let ahead = message(id: hex("33"), kind: MessageSemantics.kindChat)
-            let newest = message(id: hex("44"), kind: MessageSemantics.kindChat)
-            let keys: [String: TimelineHistoryOrderKey] = [
-                older.messageIdHex: orderKey(older.messageIdHex, epoch: 1, timelineAt: 10),
-                mid.messageIdHex: orderKey(mid.messageIdHex, epoch: 1, timelineAt: 20),
-                ahead.messageIdHex: orderKey(ahead.messageIdHex, epoch: 2, timelineAt: 30),
-                newest.messageIdHex: orderKey(newest.messageIdHex, epoch: 2, timelineAt: 40),
-            ]
-            let sleeper = ControlledSleeper()
-            var markedIds: [String] = []
-            let marker = ConversationReadMarker(
-                groupIdHex: hex("aa"),
-                appState: appState,
-                orderKey: { keys[$0] },
-                onChatListRowUpdated: nil,
-                sleep: { try await sleeper.sleep($0) },
-                markRead: { _, _, _, ids in
-                    markedIds.append(contentsOf: ids)
-                    return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
-                }
-            )
+    @Test func seedFlushedWatermarkRatchetsForwardWhenAnotherDeviceReadsAhead() async throws {
+        let appState = readMarkerAppState()
+        appState.activeAccountRef = "acct-1"
+        let older = message(id: hex("11"), kind: MessageSemantics.kindChat)
+        let mid = message(id: hex("22"), kind: MessageSemantics.kindChat)
+        let ahead = message(id: hex("33"), kind: MessageSemantics.kindChat)
+        let newest = message(id: hex("44"), kind: MessageSemantics.kindChat)
+        let keys: [String: TimelineHistoryOrderKey] = [
+            older.messageIdHex: orderKey(older.messageIdHex, epoch: 1, timelineAt: 10),
+            mid.messageIdHex: orderKey(mid.messageIdHex, epoch: 1, timelineAt: 20),
+            ahead.messageIdHex: orderKey(ahead.messageIdHex, epoch: 2, timelineAt: 30),
+            newest.messageIdHex: orderKey(newest.messageIdHex, epoch: 2, timelineAt: 40),
+        ]
+        let sleeper = ControlledSleeper()
+        var markedIds: [String] = []
+        let marker = ConversationReadMarker(
+            groupIdHex: hex("aa"),
+            appState: appState,
+            orderKey: { keys[$0] },
+            onChatListRowUpdated: nil,
+            sleep: { try await sleeper.sleep($0) },
+            markRead: { _, _, _, ids in
+                markedIds.append(contentsOf: ids)
+                return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
+            }
+        )
 
-            marker.seedFlushedWatermark(messageIdHex: mid.messageIdHex)
-            // Seeding an older id never regresses the watermark: mid stays rejected.
-            marker.seedFlushedWatermark(messageIdHex: older.messageIdHex)
-            marker.advanceWatermark(to: mid, isDeleted: false)
-            await Task.yield()
-            #expect(sleeper.requestedDelays.isEmpty)
+        marker.seedFlushedWatermark(messageIdHex: mid.messageIdHex)
+        // Seeding an older id never regresses the watermark: mid stays rejected.
+        marker.seedFlushedWatermark(messageIdHex: older.messageIdHex)
+        marker.advanceWatermark(to: mid, isDeleted: false)
+        await Task.yield()
+        #expect(sleeper.requestedDelays.isEmpty)
 
-            // Seeding a strictly newer id (linked device read ahead) ratchets forward.
-            marker.seedFlushedWatermark(messageIdHex: ahead.messageIdHex)
+        // Seeding a strictly newer id (linked device read ahead) ratchets forward.
+        marker.seedFlushedWatermark(messageIdHex: ahead.messageIdHex)
 
-            // Messages at or behind the ratcheted watermark are rejected.
-            marker.advanceWatermark(to: mid, isDeleted: false)
-            marker.advanceWatermark(to: ahead, isDeleted: false)
-            await Task.yield()
-            #expect(sleeper.requestedDelays.isEmpty)
-            #expect(markedIds.isEmpty)
+        // Messages at or behind the ratcheted watermark are rejected.
+        marker.advanceWatermark(to: mid, isDeleted: false)
+        marker.advanceWatermark(to: ahead, isDeleted: false)
+        await Task.yield()
+        #expect(sleeper.requestedDelays.isEmpty)
+        #expect(markedIds.isEmpty)
 
-            // A message strictly newer than the ratcheted watermark still flushes.
-            marker.advanceWatermark(to: newest, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await eventually { markedIds == [newest.messageIdHex] }
-        }
+        // A message strictly newer than the ratcheted watermark still flushes.
+        marker.advanceWatermark(to: newest, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await eventually { markedIds == [newest.messageIdHex] }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func offWindowSavedMarkerArrivingDuringCoalescingBlocksQueuedCandidate() async throws {
-        try await withTestClient { client in
-            let appState = readMarkerAppState(client: client)
-            appState.activeAccountRef = "acct-1"
-            let msgA = message(id: hex("d1"), kind: MessageSemantics.kindChat)
-            let msgB = message(id: hex("d2"), kind: MessageSemantics.kindChat)
-            let msgC = message(id: hex("d3"), kind: MessageSemantics.kindChat)
-            let msgD = message(id: hex("d4"), kind: MessageSemantics.kindChat)
-            var keys: [String: TimelineHistoryOrderKey] = [
-                msgA.messageIdHex: orderKey(msgA.messageIdHex, epoch: 1, timelineAt: 10),
-                msgB.messageIdHex: orderKey(msgB.messageIdHex, epoch: 1, timelineAt: 20),
-            ]
-            let sleeper = ControlledSleeper()
-            var markedIds: [String] = []
-            let marker = ConversationReadMarker(
-                groupIdHex: hex("aa"),
-                appState: appState,
-                orderKey: { keys[$0] },
-                onChatListRowUpdated: nil,
-                sleep: { try await sleeper.sleep($0) },
-                markRead: { _, _, _, ids in
-                    markedIds.append(contentsOf: ids)
-                    return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
-                }
-            )
+    @Test func offWindowSavedMarkerArrivingDuringCoalescingBlocksQueuedCandidate() async throws {
+        let appState = readMarkerAppState()
+        appState.activeAccountRef = "acct-1"
+        let msgA = message(id: hex("d1"), kind: MessageSemantics.kindChat)
+        let msgB = message(id: hex("d2"), kind: MessageSemantics.kindChat)
+        let msgC = message(id: hex("d3"), kind: MessageSemantics.kindChat)
+        let msgD = message(id: hex("d4"), kind: MessageSemantics.kindChat)
+        var keys: [String: TimelineHistoryOrderKey] = [
+            msgA.messageIdHex: orderKey(msgA.messageIdHex, epoch: 1, timelineAt: 10),
+            msgB.messageIdHex: orderKey(msgB.messageIdHex, epoch: 1, timelineAt: 20),
+        ]
+        let sleeper = ControlledSleeper()
+        var markedIds: [String] = []
+        let marker = ConversationReadMarker(
+            groupIdHex: hex("aa"),
+            appState: appState,
+            orderKey: { keys[$0] },
+            onChatListRowUpdated: nil,
+            sleep: { try await sleeper.sleep($0) },
+            markRead: { _, _, _, ids in
+                markedIds.append(contentsOf: ids)
+                return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
+            }
+        )
 
-            // Session marks A, establishing a resolved floor.
-            marker.advanceWatermark(to: msgA, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await eventually { markedIds == [msgA.messageIdHex] && sleeper.sleepingCount == 0 }
+        // Session marks A, establishing a resolved floor.
+        marker.advanceWatermark(to: msgA, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await eventually { markedIds == [msgA.messageIdHex] && sleeper.sleepingCount == 0 }
 
-            // Queue B during coalescing, then a linked device advances the
-            // saved marker to off-window C before B flushes.
-            marker.advanceWatermark(to: msgB, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            marker.seedFlushedWatermark(
-                messageIdHex: msgC.messageIdHex,
-                unreadCount: 0,
-                firstUnreadMessageIdHex: nil,
-                hasMoreAfter: true
-            )
-            sleeper.releaseAll()
-            await Task.yield()
-            await Task.yield()
+        // Queue B during coalescing, then a linked device advances the
+        // saved marker to off-window C before B flushes.
+        marker.advanceWatermark(to: msgB, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        marker.seedFlushedWatermark(
+            messageIdHex: msgC.messageIdHex,
+            unreadCount: 0,
+            firstUnreadMessageIdHex: nil,
+            hasMoreAfter: true
+        )
+        sleeper.releaseAll()
+        await Task.yield()
+        await Task.yield()
 
-            // B must NOT be flushed over the newer off-window marker C.
-            #expect(markedIds == [msgA.messageIdHex])
-            let delaysAfterDrop = sleeper.requestedDelays.count
-            marker.advanceWatermark(to: msgB, isDeleted: false)
-            await Task.yield()
-            #expect(sleeper.requestedDelays.count == delaysAfterDrop)
+        // B must NOT be flushed over the newer off-window marker C.
+        #expect(markedIds == [msgA.messageIdHex])
+        let delaysAfterDrop = sleeper.requestedDelays.count
+        marker.advanceWatermark(to: msgB, isDeleted: false)
+        await Task.yield()
+        #expect(sleeper.requestedDelays.count == delaysAfterDrop)
 
-            // Once C and newer D enter the window, C promotes to the durable
-            // floor and D is admitted normally.
-            keys[msgC.messageIdHex] = orderKey(msgC.messageIdHex, epoch: 2, timelineAt: 30)
-            keys[msgD.messageIdHex] = orderKey(msgD.messageIdHex, epoch: 2, timelineAt: 40)
-            marker.seedFlushedWatermark(
-                messageIdHex: msgC.messageIdHex,
-                unreadCount: 1,
-                firstUnreadMessageIdHex: msgD.messageIdHex,
-                hasMoreAfter: false
-            )
-            marker.advanceWatermark(to: msgD, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await eventually { markedIds == [msgA.messageIdHex, msgD.messageIdHex] }
-        }
+        // Once C and newer D enter the window, C promotes to the durable
+        // floor and D is admitted normally.
+        keys[msgC.messageIdHex] = orderKey(msgC.messageIdHex, epoch: 2, timelineAt: 30)
+        keys[msgD.messageIdHex] = orderKey(msgD.messageIdHex, epoch: 2, timelineAt: 40)
+        marker.seedFlushedWatermark(
+            messageIdHex: msgC.messageIdHex,
+            unreadCount: 1,
+            firstUnreadMessageIdHex: msgD.messageIdHex,
+            hasMoreAfter: false
+        )
+        marker.advanceWatermark(to: msgD, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await eventually { markedIds == [msgA.messageIdHex, msgD.messageIdHex] }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func inFlightReadMarkPreservesOffWindowSavedMarkerReportedOnCompletion() async throws {
-        try await withTestClient { client in
-            let reconcileCount = Mutex(0)
-            let notifications = AppNotifications(
-                deliveredNotificationDescriptorsProvider: {
-                    reconcileCount.withLock { $0 += 1 }
-                    return []
+    @Test func inFlightReadMarkPreservesOffWindowSavedMarkerReportedOnCompletion() async throws {
+        let reconcileCount = Mutex(0)
+        let notifications = AppNotifications(
+            deliveredNotificationDescriptorsProvider: {
+                reconcileCount.withLock { $0 += 1 }
+                return []
+            }
+        )
+        let appState = AppState.test(notifications: notifications)
+        appState.activeAccountRef = "acct-1"
+        let msgB = message(id: hex("f1"), kind: MessageSemantics.kindChat)
+        let msgB2 = message(id: hex("f2"), kind: MessageSemantics.kindChat)
+        let msgB3 = message(id: hex("f3"), kind: MessageSemantics.kindChat)
+        let offWindowC = hex("f9")
+        let offWindowFirstUnread = hex("fa")
+        let keys: [String: TimelineHistoryOrderKey] = [
+            msgB.messageIdHex: orderKey(msgB.messageIdHex, epoch: 1, timelineAt: 10),
+            msgB2.messageIdHex: orderKey(msgB2.messageIdHex, epoch: 1, timelineAt: 20),
+            msgB3.messageIdHex: orderKey(msgB3.messageIdHex, epoch: 1, timelineAt: 30),
+        ]
+        let sleeper = ControlledSleeper()
+        let writeEntered = TestLatch()
+        let writeRelease = TestLatch()
+        var markedIds: [String] = []
+        var returnedRow: ChatListRowFfi?
+        let marker = ConversationReadMarker(
+            groupIdHex: hex("aa"),
+            appState: appState,
+            orderKey: { keys[$0] },
+            onChatListRowUpdated: nil,
+            sleep: { try await sleeper.sleep($0) },
+            markRead: { _, _, _, ids in
+                markedIds.append(contentsOf: ids)
+                writeEntered.signal()
+                try await writeRelease.wait()
+                return ids.map {
+                    TimelineReadMarkResult(messageIdHex: $0, row: returnedRow, succeeded: true)
                 }
-            )
-            let appState = AppState.test(client: client, notifications: notifications)
-            appState.activeAccountRef = "acct-1"
-            let msgB = message(id: hex("f1"), kind: MessageSemantics.kindChat)
-            let msgB2 = message(id: hex("f2"), kind: MessageSemantics.kindChat)
-            let msgB3 = message(id: hex("f3"), kind: MessageSemantics.kindChat)
-            let offWindowC = hex("f9")
-            let offWindowFirstUnread = hex("fa")
-            let keys: [String: TimelineHistoryOrderKey] = [
-                msgB.messageIdHex: orderKey(msgB.messageIdHex, epoch: 1, timelineAt: 10),
-                msgB2.messageIdHex: orderKey(msgB2.messageIdHex, epoch: 1, timelineAt: 20),
-                msgB3.messageIdHex: orderKey(msgB3.messageIdHex, epoch: 1, timelineAt: 30),
-            ]
-            let sleeper = ControlledSleeper()
-            let writeEntered = TestLatch()
-            let writeRelease = TestLatch()
-            var markedIds: [String] = []
-            var returnedRow: ChatListRowFfi?
-            let marker = ConversationReadMarker(
-                groupIdHex: hex("aa"),
-                appState: appState,
-                orderKey: { keys[$0] },
-                onChatListRowUpdated: nil,
-                sleep: { try await sleeper.sleep($0) },
-                markRead: { _, _, _, ids in
-                    markedIds.append(contentsOf: ids)
-                    writeEntered.signal()
-                    try await writeRelease.wait()
-                    return ids.map {
-                        TimelineReadMarkResult(messageIdHex: $0, row: returnedRow, succeeded: true)
-                    }
-                }
-            )
+            }
+        )
 
-            // Case 1: MDK returns success for B, but its returned row reports
-            // that the durable cursor is at off-window C with unread messages
-            // still beyond the current historical page. Completion must retain
-            // off-window C fail-closed (`hasMoreAfter = true`) and block B2.
-            var rowAtC = chatListRow(groupIdHex: hex("aa"), title: "Chat")
-            rowAtC.lastReadMessageIdHex = offWindowC
-            rowAtC.unreadCount = 2
-            rowAtC.firstUnreadMessageIdHex = offWindowFirstUnread
-            returnedRow = rowAtC
-            marker.advanceWatermark(to: msgB, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await writeEntered.wait()
-            writeRelease.signal()
-            // Waiting for notification reconciliation proves `settleSuccessfulFlush` completed.
-            try await eventually { reconcileCount.withLock { $0 } >= 1 }
+        // Case 1: MDK returns success for B, but its returned row reports
+        // that the durable cursor is at off-window C with unread messages
+        // still beyond the current historical page. Completion must retain
+        // off-window C fail-closed (`hasMoreAfter = true`) and block B2.
+        var rowAtC = chatListRow(groupIdHex: hex("aa"), title: "Chat")
+        rowAtC.lastReadMessageIdHex = offWindowC
+        rowAtC.unreadCount = 2
+        rowAtC.firstUnreadMessageIdHex = offWindowFirstUnread
+        returnedRow = rowAtC
+        marker.advanceWatermark(to: msgB, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await writeEntered.wait()
+        writeRelease.signal()
+        // Waiting for notification reconciliation proves `settleSuccessfulFlush` completed.
+        try await eventually { reconcileCount.withLock { $0 } >= 1 }
 
-            let delaysAfterB = sleeper.requestedDelays.count
-            marker.advanceWatermark(to: msgB2, isDeleted: false)
-            #expect(sleeper.requestedDelays.count == delaysAfterB)
-            #expect(markedIds == [msgB.messageIdHex])
+        let delaysAfterB = sleeper.requestedDelays.count
+        marker.advanceWatermark(to: msgB2, isDeleted: false)
+        #expect(sleeper.requestedDelays.count == delaysAfterB)
+        #expect(markedIds == [msgB.messageIdHex])
 
-            // Case 2: Another off-window marker arrives via seedFlushedWatermark
-            // AFTER an in-flight write starts (and the write returns row == nil).
-            // Completion must preserve the newer off-window floor instead of clearing it.
-            let write2Entered = TestLatch()
-            let write2Release = TestLatch()
-            var marked2: [String] = []
-            let marker2 = ConversationReadMarker(
-                groupIdHex: hex("aa"),
-                appState: appState,
-                orderKey: { keys[$0] },
-                onChatListRowUpdated: nil,
-                sleep: { try await sleeper.sleep($0) },
-                markRead: { _, _, _, ids in
-                    marked2.append(contentsOf: ids)
-                    write2Entered.signal()
-                    try await write2Release.wait()
-                    return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
-                }
-            )
-            marker2.advanceWatermark(to: msgB, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await write2Entered.wait()
+        // Case 2: Another off-window marker arrives via seedFlushedWatermark
+        // AFTER an in-flight write starts (and the write returns row == nil).
+        // Completion must preserve the newer off-window floor instead of clearing it.
+        let write2Entered = TestLatch()
+        let write2Release = TestLatch()
+        var marked2: [String] = []
+        let marker2 = ConversationReadMarker(
+            groupIdHex: hex("aa"),
+            appState: appState,
+            orderKey: { keys[$0] },
+            onChatListRowUpdated: nil,
+            sleep: { try await sleeper.sleep($0) },
+            markRead: { _, _, _, ids in
+                marked2.append(contentsOf: ids)
+                write2Entered.signal()
+                try await write2Release.wait()
+                return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
+            }
+        )
+        marker2.advanceWatermark(to: msgB, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await write2Entered.wait()
 
-            marker2.seedFlushedWatermark(
-                messageIdHex: offWindowC,
-                unreadCount: 0,
-                firstUnreadMessageIdHex: nil,
-                hasMoreAfter: true
-            )
-            let reconcilesBeforeRelease = reconcileCount.withLock { $0 }
-            write2Release.signal()
-            try await eventually { reconcileCount.withLock { $0 } > reconcilesBeforeRelease }
+        marker2.seedFlushedWatermark(
+            messageIdHex: offWindowC,
+            unreadCount: 0,
+            firstUnreadMessageIdHex: nil,
+            hasMoreAfter: true
+        )
+        let reconcilesBeforeRelease = reconcileCount.withLock { $0 }
+        write2Release.signal()
+        try await eventually { reconcileCount.withLock { $0 } > reconcilesBeforeRelease }
 
-            let delaysAfterSeed = sleeper.requestedDelays.count
-            marker2.advanceWatermark(to: msgB3, isDeleted: false)
-            #expect(sleeper.requestedDelays.count == delaysAfterSeed)
-            #expect(marked2 == [msgB.messageIdHex])
-        }
+        let delaysAfterSeed = sleeper.requestedDelays.count
+        marker2.advanceWatermark(to: msgB3, isDeleted: false)
+        #expect(sleeper.requestedDelays.count == delaysAfterSeed)
+        #expect(marked2 == [msgB.messageIdHex])
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func reconcileDeliveredNotificationsSkipsRemovalWhenFlushSuspendedDuringLookup() async throws {
-        try await withTestClient { client in
-            let groupIdHex = hex("aa")
-            let msg1 = message(id: hex("e7"), kind: MessageSemantics.kindChat)
-            let msg2 = message(id: hex("e8"), kind: MessageSemantics.kindChat)
-            let keys: [String: TimelineHistoryOrderKey] = [
-                msg1.messageIdHex: orderKey(msg1.messageIdHex, epoch: 1, timelineAt: 100),
-                msg2.messageIdHex: orderKey(msg2.messageIdHex, epoch: 1, timelineAt: 200),
-            ]
-            let lookup2Entered = TestLatch()
-            let lookup2Release = TestLatch()
-            let lookup2Returned = TestLatch()
-            let lookupCalls = Mutex(0)
-            let removedIdentifiers = Mutex<[String]>([])
-            let descriptor1 = DeliveredNotificationDescriptor(
-                identifier: "notif-1",
-                route: LocalNotificationRoute(
-                    accountRef: "acct-1",
-                    groupIdHex: groupIdHex,
-                    notificationKey: "notif-1",
-                    messageIdHex: msg1.messageIdHex
-                ),
-                isMessageNotification: true,
-                isActionFailure: false
-            )
-            let descriptor2 = DeliveredNotificationDescriptor(
-                identifier: "notif-2",
-                route: LocalNotificationRoute(
-                    accountRef: "acct-1",
-                    groupIdHex: groupIdHex,
-                    notificationKey: "notif-2",
-                    messageIdHex: msg2.messageIdHex
-                ),
-                isMessageNotification: true,
-                isActionFailure: false
-            )
-            let notifications = AppNotifications(
-                deliveredNotificationDescriptorsProvider: {
-                    let call = lookupCalls.withLock { count -> Int in
-                        count += 1
-                        return count
-                    }
-                    if call == 1 {
-                        return [descriptor1]
-                    }
-                    lookup2Entered.signal()
-                    try? await lookup2Release.wait()
-                    defer { lookup2Returned.signal() }
-                    return [descriptor2]
-                },
-                deliveredNotificationIdentifiersRemover: { ids in
-                    removedIdentifiers.withLock { $0.append(contentsOf: ids) }
-                }
-            )
-            let appState = AppState.test(client: client, notifications: notifications)
-            appState.activeAccountRef = "acct-1"
-
-            let sleeper = ControlledSleeper()
-            var fullyReadRow = chatListRow(groupIdHex: groupIdHex, title: "Chat")
-            fullyReadRow.hasUnread = false
-            fullyReadRow.unreadCount = 0
-            let marker = ConversationReadMarker(
-                groupIdHex: groupIdHex,
-                appState: appState,
-                orderKey: { keys[$0] },
-                onChatListRowUpdated: nil,
-                sleep: { try await sleeper.sleep($0) },
-                markRead: { _, _, _, ids in
-                    ids.map { TimelineReadMarkResult(messageIdHex: $0, row: fullyReadRow, succeeded: true) }
-                }
-            )
-
-            // Positive control: unsuspended flush removes delivered notifications.
-            marker.advanceWatermark(to: msg1, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await eventually { removedIdentifiers.withLock { $0 } == ["notif-1"] }
-
-            // Suspended case: suspend while delivered-notification lookup is in flight;
-            // once lookup completes after suspension, stale removal must be skipped.
-            marker.advanceWatermark(to: msg2, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await lookup2Entered.wait()
-
-            marker.suspendPendingReadMarks()
-            lookup2Release.signal()
-            try await lookup2Returned.wait()
-            // Drain any already-enqueued centerMutationQueue work via a second no-op reconcile barrier.
-            await notifications.reconcileDeliveredNotificationsAfterRead(
+    @Test func reconcileDeliveredNotificationsSkipsRemovalWhenFlushSuspendedDuringLookup() async throws {
+        let groupIdHex = hex("aa")
+        let msg1 = message(id: hex("e7"), kind: MessageSemantics.kindChat)
+        let msg2 = message(id: hex("e8"), kind: MessageSemantics.kindChat)
+        let keys: [String: TimelineHistoryOrderKey] = [
+            msg1.messageIdHex: orderKey(msg1.messageIdHex, epoch: 1, timelineAt: 100),
+            msg2.messageIdHex: orderKey(msg2.messageIdHex, epoch: 1, timelineAt: 200),
+        ]
+        let lookup2Entered = TestLatch()
+        let lookup2Release = TestLatch()
+        let lookup2Returned = TestLatch()
+        let lookupCalls = Mutex(0)
+        let removedIdentifiers = Mutex<[String]>([])
+        let descriptor1 = DeliveredNotificationDescriptor(
+            identifier: "notif-1",
+            route: LocalNotificationRoute(
                 accountRef: "acct-1",
                 groupIdHex: groupIdHex,
-                readMessageIdHexes: [hex("e9")],
-                conversationStillHasUnread: true,
-                shouldRemoveDeliveredNotifications: { false }
-            )
-
-            #expect(removedIdentifiers.withLock { $0 } == ["notif-1"])
-        }
-    }
-
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func readMarkerExitsSleepLoopWhenBackgroundedAndFlushesOnResume() async throws {
-        try await withTestClient { client in
-            let appState = readMarkerAppState(client: client)
-            appState.activeAccountRef = "acct-1"
-            let first = message(id: hex("11"), kind: MessageSemantics.kindChat)
-            let second = message(id: hex("22"), kind: MessageSemantics.kindChat)
-            let keys: [String: TimelineHistoryOrderKey] = [
-                first.messageIdHex: orderKey(first.messageIdHex, epoch: 1, timelineAt: 10),
-                second.messageIdHex: orderKey(second.messageIdHex, epoch: 1, timelineAt: 20),
-            ]
-            let sleeper = ControlledSleeper()
-            var markedIds: [String] = []
-            let marker = ConversationReadMarker(
-                groupIdHex: hex("aa"),
-                appState: appState,
-                orderKey: { keys[$0] },
-                onChatListRowUpdated: nil,
-                sleep: { try await sleeper.sleep($0) },
-                markRead: { _, _, _, ids in
-                    markedIds.append(contentsOf: ids)
-                    return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
+                notificationKey: "notif-1",
+                messageIdHex: msg1.messageIdHex
+            ),
+            isMessageNotification: true,
+            isActionFailure: false
+        )
+        let descriptor2 = DeliveredNotificationDescriptor(
+            identifier: "notif-2",
+            route: LocalNotificationRoute(
+                accountRef: "acct-1",
+                groupIdHex: groupIdHex,
+                notificationKey: "notif-2",
+                messageIdHex: msg2.messageIdHex
+            ),
+            isMessageNotification: true,
+            isActionFailure: false
+        )
+        let notifications = AppNotifications(
+            deliveredNotificationDescriptorsProvider: {
+                let call = lookupCalls.withLock { count -> Int in
+                    count += 1
+                    return count
                 }
-            )
+                if call == 1 {
+                    return [descriptor1]
+                }
+                lookup2Entered.signal()
+                try? await lookup2Release.wait()
+                defer { lookup2Returned.signal() }
+                return [descriptor2]
+            },
+            deliveredNotificationIdentifiersRemover: { ids in
+                removedIdentifiers.withLock { $0.append(contentsOf: ids) }
+            }
+        )
+        let appState = AppState.test(notifications: notifications)
+        appState.activeAccountRef = "acct-1"
 
-            marker.advanceWatermark(to: first, isDeleted: false)
+        let sleeper = ControlledSleeper()
+        var fullyReadRow = chatListRow(groupIdHex: groupIdHex, title: "Chat")
+        fullyReadRow.hasUnread = false
+        fullyReadRow.unreadCount = 0
+        let marker = ConversationReadMarker(
+            groupIdHex: groupIdHex,
+            appState: appState,
+            orderKey: { keys[$0] },
+            onChatListRowUpdated: nil,
+            sleep: { try await sleeper.sleep($0) },
+            markRead: { _, _, _, ids in
+                ids.map { TimelineReadMarkResult(messageIdHex: $0, row: fullyReadRow, succeeded: true) }
+            }
+        )
+
+        // Positive control: unsuspended flush removes delivered notifications.
+        marker.advanceWatermark(to: msg1, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await eventually { removedIdentifiers.withLock { $0 } == ["notif-1"] }
+
+        // Suspended case: suspend while delivered-notification lookup is in flight;
+        // once lookup completes after suspension, stale removal must be skipped.
+        marker.advanceWatermark(to: msg2, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await lookup2Entered.wait()
+
+        marker.suspendPendingReadMarks()
+        lookup2Release.signal()
+        try await lookup2Returned.wait()
+        // Drain any already-enqueued centerMutationQueue work via a second no-op reconcile barrier.
+        await notifications.reconcileDeliveredNotificationsAfterRead(
+            accountRef: "acct-1",
+            groupIdHex: groupIdHex,
+            readMessageIdHexes: [hex("e9")],
+            conversationStillHasUnread: true,
+            shouldRemoveDeliveredNotifications: { false }
+        )
+
+        #expect(removedIdentifiers.withLock { $0 } == ["notif-1"])
+    }
+
+    @Test func readMarkerExitsSleepLoopWhenBackgroundedAndFlushesOnResume() async throws {
+        let appState = readMarkerAppState()
+        appState.activeAccountRef = "acct-1"
+        let first = message(id: hex("11"), kind: MessageSemantics.kindChat)
+        let second = message(id: hex("22"), kind: MessageSemantics.kindChat)
+        let keys: [String: TimelineHistoryOrderKey] = [
+            first.messageIdHex: orderKey(first.messageIdHex, epoch: 1, timelineAt: 10),
+            second.messageIdHex: orderKey(second.messageIdHex, epoch: 1, timelineAt: 20),
+        ]
+        let sleeper = ControlledSleeper()
+        var markedIds: [String] = []
+        let marker = ConversationReadMarker(
+            groupIdHex: hex("aa"),
+            appState: appState,
+            orderKey: { keys[$0] },
+            onChatListRowUpdated: nil,
+            sleep: { try await sleeper.sleep($0) },
+            markRead: { _, _, _, ids in
+                markedIds.append(contentsOf: ids)
+                return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
+            }
+        )
+
+        marker.advanceWatermark(to: first, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+
+        // Background before the coalesced flush fires: the task must exit cleanly
+        // without scheduling another 100 ms poll, while keeping the pending watermark.
+        appState.setAppSceneActive(false)
+        sleeper.releaseAll()
+        try await eventually { sleeper.sleepingCount == 0 }
+        await Task.yield()
+        #expect(sleeper.requestedDelays.count == 1)
+        #expect(markedIds.isEmpty)
+
+        // Advancing while backgrounded updates the parked candidate without starting a timer.
+        marker.advanceWatermark(to: second, isDeleted: false)
+        await Task.yield()
+        #expect(sleeper.requestedDelays.count == 1)
+
+        // Returning to foreground resumes via flushIfNeeded() and marks the newest watermark once.
+        appState.setAppSceneActive(true)
+        marker.flushIfNeeded()
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await eventually { markedIds == [second.messageIdHex] && sleeper.sleepingCount == 0 }
+        #expect(sleeper.requestedDelays.count == 2)
+    }
+
+    @Test func exhaustedReadMarkFailuresDoNotPresentUserFacingToast() async throws {
+        let appState = readMarkerAppState()
+        appState.activeAccountRef = "acct-1"
+        let candidate = message(id: hex("55"), kind: MessageSemantics.kindChat)
+        let key = orderKey(candidate.messageIdHex, epoch: 1, timelineAt: 50)
+        let sleeper = ControlledSleeper()
+        var attempts = 0
+        let marker = ConversationReadMarker(
+            groupIdHex: hex("aa"),
+            appState: appState,
+            orderKey: { $0 == candidate.messageIdHex ? key : nil },
+            onChatListRowUpdated: nil,
+            sleep: { try await sleeper.sleep($0) },
+            markRead: { _, _, _, ids in
+                attempts += 1
+                return ids.map {
+                    TimelineReadMarkResult(
+                        messageIdHex: $0,
+                        row: nil,
+                        succeeded: false,
+                        failureCategory: "marmot_error"
+                    )
+                }
+            }
+        )
+
+        marker.advanceWatermark(to: candidate, isDeleted: false)
+        for expectedAttempt in 1...ConversationReadMarker.maximumFailedFlushAttempts {
             try await eventually { sleeper.sleepingCount == 1 }
-
-            // Background before the coalesced flush fires: the task must exit cleanly
-            // without scheduling another 100 ms poll, while keeping the pending watermark.
-            appState.setAppSceneActive(false)
             sleeper.releaseAll()
-            try await eventually { sleeper.sleepingCount == 0 }
-            await Task.yield()
-            #expect(sleeper.requestedDelays.count == 1)
-            #expect(markedIds.isEmpty)
+            try await eventually { attempts == expectedAttempt }
+        }
+        await Task.yield()
+        await Task.yield()
+        #expect(sleeper.sleepingCount == 0)
+        #expect(sleeper.requestedDelays.count == ConversationReadMarker.maximumFailedFlushAttempts)
+        #expect(appState.activeToast == nil)
+    }
 
-            // Advancing while backgrounded updates the parked candidate without starting a timer.
-            marker.advanceWatermark(to: second, isDeleted: false)
-            await Task.yield()
-            #expect(sleeper.requestedDelays.count == 1)
+    @Test func optimisticUnresolvedOwnSendDoesNotBlockNewerInboundReadMarks() async throws {
+        let appState = readMarkerAppState()
+        appState.activeAccountRef = "acct-1"
+        let ownSend = message(id: hex("a1"), kind: MessageSemantics.kindChat)
+        let inboundReply = message(id: hex("a2"), kind: MessageSemantics.kindChat)
+        // Keep ownSend unresolved (rank 2: sourceEpoch == nil, sourceMessageIdHex == nil).
+        var keys: [String: TimelineHistoryOrderKey] = [
+            ownSend.messageIdHex: TimelineHistoryOrderKey(
+                sourceMessageIdHex: nil,
+                sourceEpoch: nil,
+                kind: ownSend.kind,
+                timelineAt: 100,
+                messageIdHex: ownSend.messageIdHex
+            ),
+            inboundReply.messageIdHex: orderKey(inboundReply.messageIdHex, epoch: 5, timelineAt: 110),
+        ]
 
-            // Returning to foreground resumes via flushIfNeeded() and marks the newest watermark once.
-            appState.setAppSceneActive(true)
-            marker.flushIfNeeded()
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await eventually { markedIds == [second.messageIdHex] && sleeper.sleepingCount == 0 }
-            #expect(sleeper.requestedDelays.count == 2)
+        // Both viewport selection and single-row eligibility (used by the
+        // tail path in ConversationViewModel.newestTailWatermarkCandidate)
+        // exclude unresolved rank-2 optimistic sends so Marmot never
+        // persists a class-2 cursor ahead of authenticated rows.
+        #expect(
+            ConversationReadMarker.nextWatermark(
+                candidateKey: keys[ownSend.messageIdHex],
+                pendingKey: nil,
+                flushedKey: nil,
+                kind: ownSend.kind,
+                tags: ownSend.tags,
+                isDeleted: false
+            ) == nil
+        )
+        #expect(
+            ConversationReadMarker.newestWatermarkCandidate(
+                in: [ownSend],
+                isDeleted: { _ in false },
+                orderKey: { keys[$0] }
+            ) == nil
+        )
+        #expect(
+            ConversationReadMarker.newestWatermarkCandidate(
+                in: [ownSend, inboundReply],
+                isDeleted: { _ in false },
+                orderKey: { keys[$0] }
+            )?.messageIdHex == inboundReply.messageIdHex
+        )
+        #expect(
+            ConversationReadMarker.newestWatermarkCandidate(
+                in: [inboundReply, ownSend],
+                isDeleted: { _ in false },
+                orderKey: { keys[$0] }
+            )?.messageIdHex == inboundReply.messageIdHex
+        )
+
+        let sleeper = ControlledSleeper()
+        var markedIds: [String] = []
+        let marker = ConversationReadMarker(
+            groupIdHex: hex("aa"),
+            appState: appState,
+            orderKey: { keys[$0] },
+            onChatListRowUpdated: nil,
+            sleep: { try await sleeper.sleep($0) },
+            markRead: { _, _, _, ids in
+                markedIds.append(contentsOf: ids)
+                return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
+            }
+        )
+
+        // Advancing to the unresolved optimistic own send is ignored.
+        marker.advanceWatermark(to: ownSend, isDeleted: false)
+        await Task.yield()
+        #expect(sleeper.requestedDelays.isEmpty)
+
+        // A durable inbound reply flushes cleanly.
+        marker.advanceWatermark(to: inboundReply, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await eventually { markedIds == [inboundReply.messageIdHex] && sleeper.sleepingCount == 0 }
+
+        // Once the own send settles to a newer durable epoch row, it becomes eligible.
+        keys[ownSend.messageIdHex] = orderKey(ownSend.messageIdHex, epoch: 5, timelineAt: 120)
+        marker.advanceWatermark(to: ownSend, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await eventually {
+            markedIds == [inboundReply.messageIdHex, ownSend.messageIdHex] && sleeper.sleepingCount == 0
         }
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func exhaustedReadMarkFailuresDoNotPresentUserFacingToast() async throws {
-        try await withTestClient { client in
-            let appState = readMarkerAppState(client: client)
-            appState.activeAccountRef = "acct-1"
-            let candidate = message(id: hex("55"), kind: MessageSemantics.kindChat)
-            let key = orderKey(candidate.messageIdHex, epoch: 1, timelineAt: 50)
-            let sleeper = ControlledSleeper()
-            var attempts = 0
-            let marker = ConversationReadMarker(
-                groupIdHex: hex("aa"),
-                appState: appState,
-                orderKey: { $0 == candidate.messageIdHex ? key : nil },
-                onChatListRowUpdated: nil,
-                sleep: { try await sleeper.sleep($0) },
-                markRead: { _, _, _, ids in
-                    attempts += 1
+    @Test func inFlightReadMarkBlocksOlderRowsFromQueuingDuringFlush() async throws {
+        let appState = readMarkerAppState()
+        appState.activeAccountRef = "acct-1"
+        let older = message(id: hex("b1"), kind: MessageSemantics.kindChat)
+        let newer = message(id: hex("b2"), kind: MessageSemantics.kindChat)
+        let keys: [String: TimelineHistoryOrderKey] = [
+            older.messageIdHex: orderKey(older.messageIdHex, epoch: 2, timelineAt: 100),
+            newer.messageIdHex: orderKey(newer.messageIdHex, epoch: 2, timelineAt: 200),
+        ]
+        let sleeper = ControlledSleeper()
+        let markEntered = TestLatch()
+        let markRelease = TestLatch()
+        var markedIds: [String] = []
+        let marker = ConversationReadMarker(
+            groupIdHex: hex("aa"),
+            appState: appState,
+            orderKey: { keys[$0] },
+            onChatListRowUpdated: nil,
+            sleep: { try await sleeper.sleep($0) },
+            markRead: { _, _, _, ids in
+                markedIds.append(contentsOf: ids)
+                markEntered.signal()
+                try await markRelease.wait()
+                return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
+            }
+        )
+
+        marker.advanceWatermark(to: newer, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await markEntered.wait()
+
+        // Scrolling up to an older row while the newer mark is in flight must
+        // not enqueue or flush the older row.
+        marker.advanceWatermark(to: older, isDeleted: false)
+        markRelease.signal()
+        await Task.yield()
+        await Task.yield()
+        #expect(sleeper.requestedDelays.count == 1)
+        #expect(markedIds == [newer.messageIdHex])
+    }
+
+    @Test func retiredFlushAfterSuspensionCannotClobberResumedFlushState() async throws {
+        let appState = readMarkerAppState()
+        appState.activeAccountRef = "acct-1"
+        let older = message(id: hex("e1"), kind: MessageSemantics.kindChat)
+        let first = message(id: hex("e2"), kind: MessageSemantics.kindChat)
+        let second = message(id: hex("e3"), kind: MessageSemantics.kindChat)
+        let keys: [String: TimelineHistoryOrderKey] = [
+            older.messageIdHex: orderKey(older.messageIdHex, epoch: 1, timelineAt: 100),
+            first.messageIdHex: orderKey(first.messageIdHex, epoch: 1, timelineAt: 200),
+            second.messageIdHex: orderKey(second.messageIdHex, epoch: 1, timelineAt: 300),
+        ]
+        let sleeper = ControlledSleeper()
+        let flush1Entered = TestLatch()
+        let flush1Release = TestLatch()
+        let flush2Entered = TestLatch()
+        let flush2Release = TestLatch()
+        var markedIds: [String] = []
+        var callCount = 0
+        let marker = ConversationReadMarker(
+            groupIdHex: hex("aa"),
+            appState: appState,
+            orderKey: { keys[$0] },
+            onChatListRowUpdated: nil,
+            sleep: { try await sleeper.sleep($0) },
+            markRead: { _, _, _, ids in
+                callCount += 1
+                let currentCall = callCount
+                markedIds.append(contentsOf: ids)
+                if currentCall == 1 {
+                    flush1Entered.signal()
+                    try? await flush1Release.wait()
                     return ids.map {
                         TimelineReadMarkResult(
                             messageIdHex: $0,
                             row: nil,
                             succeeded: false,
-                            failureCategory: "marmot_error"
+                            failureCategory: "storage_closed"
                         )
                     }
                 }
-            )
-
-            marker.advanceWatermark(to: candidate, isDeleted: false)
-            for expectedAttempt in 1...ConversationReadMarker.maximumFailedFlushAttempts {
-                try await eventually { sleeper.sleepingCount == 1 }
-                sleeper.releaseAll()
-                try await eventually { attempts == expectedAttempt }
+                flush2Entered.signal()
+                try? await flush2Release.wait()
+                return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
             }
-            await Task.yield()
-            await Task.yield()
-            #expect(sleeper.sleepingCount == 0)
-            #expect(sleeper.requestedDelays.count == ConversationReadMarker.maximumFailedFlushAttempts)
-            #expect(appState.activeToast == nil)
-        }
+        )
+
+        // Start flush #1 and hold it in flight.
+        marker.advanceWatermark(to: first, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await flush1Entered.wait()
+
+        // Suspend mid-flight, then resume with a newer candidate starting flush #2.
+        marker.suspendPendingReadMarks()
+        marker.advanceWatermark(to: second, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await flush2Entered.wait()
+
+        // Retired flush #1 finishes with a failure while flush #2 is still in flight.
+        // It must neither clear flush #2's in-flight floor nor requeue `first`.
+        flush1Release.signal()
+        await Task.yield()
+        await Task.yield()
+
+        marker.advanceWatermark(to: older, isDeleted: false)
+        flush2Release.signal()
+        await Task.yield()
+        await Task.yield()
+
+        #expect(markedIds == [first.messageIdHex, second.messageIdHex])
+        #expect(sleeper.requestedDelays.count == 2)
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func optimisticUnresolvedOwnSendDoesNotBlockNewerInboundReadMarks() async throws {
-        try await withTestClient { client in
-            let appState = readMarkerAppState(client: client)
-            appState.activeAccountRef = "acct-1"
-            let ownSend = message(id: hex("a1"), kind: MessageSemantics.kindChat)
-            let inboundReply = message(id: hex("a2"), kind: MessageSemantics.kindChat)
-            // Keep ownSend unresolved (rank 2: sourceEpoch == nil, sourceMessageIdHex == nil).
-            var keys: [String: TimelineHistoryOrderKey] = [
-                ownSend.messageIdHex: TimelineHistoryOrderKey(
-                    sourceMessageIdHex: nil,
-                    sourceEpoch: nil,
-                    kind: ownSend.kind,
-                    timelineAt: 100,
-                    messageIdHex: ownSend.messageIdHex
-                ),
-                inboundReply.messageIdHex: orderKey(inboundReply.messageIdHex, epoch: 5, timelineAt: 110),
-            ]
-
-            // Both viewport selection and single-row eligibility (used by the
-            // tail path in ConversationViewModel.newestTailWatermarkCandidate)
-            // exclude unresolved rank-2 optimistic sends so Marmot never
-            // persists a class-2 cursor ahead of authenticated rows.
-            #expect(
-                ConversationReadMarker.nextWatermark(
-                    candidateKey: keys[ownSend.messageIdHex],
-                    pendingKey: nil,
-                    flushedKey: nil,
-                    kind: ownSend.kind,
-                    tags: ownSend.tags,
-                    isDeleted: false
-                ) == nil
-            )
-            #expect(
-                ConversationReadMarker.newestWatermarkCandidate(
-                    in: [ownSend],
-                    isDeleted: { _ in false },
-                    orderKey: { keys[$0] }
-                ) == nil
-            )
-            #expect(
-                ConversationReadMarker.newestWatermarkCandidate(
-                    in: [ownSend, inboundReply],
-                    isDeleted: { _ in false },
-                    orderKey: { keys[$0] }
-                )?.messageIdHex == inboundReply.messageIdHex
-            )
-            #expect(
-                ConversationReadMarker.newestWatermarkCandidate(
-                    in: [inboundReply, ownSend],
-                    isDeleted: { _ in false },
-                    orderKey: { keys[$0] }
-                )?.messageIdHex == inboundReply.messageIdHex
-            )
-
-            let sleeper = ControlledSleeper()
-            var markedIds: [String] = []
-            let marker = ConversationReadMarker(
-                groupIdHex: hex("aa"),
-                appState: appState,
-                orderKey: { keys[$0] },
-                onChatListRowUpdated: nil,
-                sleep: { try await sleeper.sleep($0) },
-                markRead: { _, _, _, ids in
-                    markedIds.append(contentsOf: ids)
-                    return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
-                }
-            )
-
-            // Advancing to the unresolved optimistic own send is ignored.
-            marker.advanceWatermark(to: ownSend, isDeleted: false)
-            await Task.yield()
-            #expect(sleeper.requestedDelays.isEmpty)
-
-            // A durable inbound reply flushes cleanly.
-            marker.advanceWatermark(to: inboundReply, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await eventually { markedIds == [inboundReply.messageIdHex] && sleeper.sleepingCount == 0 }
-
-            // Once the own send settles to a newer durable epoch row, it becomes eligible.
-            keys[ownSend.messageIdHex] = orderKey(ownSend.messageIdHex, epoch: 5, timelineAt: 120)
-            marker.advanceWatermark(to: ownSend, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await eventually {
-                markedIds == [inboundReply.messageIdHex, ownSend.messageIdHex] && sleeper.sleepingCount == 0
+    @Test func historicalPageExcludingPersistedMarkerDoesNotRegressReadMark() async throws {
+        let appState = readMarkerAppState()
+        appState.activeAccountRef = "acct-1"
+        let older = message(id: hex("c1"), kind: MessageSemantics.kindChat)
+        let firstUnread = message(id: hex("c3"), kind: MessageSemantics.kindChat)
+        let liveTail = message(id: hex("c4"), kind: MessageSemantics.kindChat)
+        var keys: [String: TimelineHistoryOrderKey] = [
+            older.messageIdHex: orderKey(older.messageIdHex, epoch: 1, timelineAt: 50),
+        ]
+        let sleeper = ControlledSleeper()
+        var markedIds: [String] = []
+        let marker = ConversationReadMarker(
+            groupIdHex: hex("aa"),
+            appState: appState,
+            orderKey: { keys[$0] },
+            onChatListRowUpdated: nil,
+            sleep: { try await sleeper.sleep($0) },
+            markRead: { _, _, _, ids in
+                markedIds.append(contentsOf: ids)
+                return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
             }
-        }
-    }
+        )
 
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func inFlightReadMarkBlocksOlderRowsFromQueuingDuringFlush() async throws {
-        try await withTestClient { client in
-            let appState = readMarkerAppState(client: client)
-            appState.activeAccountRef = "acct-1"
-            let older = message(id: hex("b1"), kind: MessageSemantics.kindChat)
-            let newer = message(id: hex("b2"), kind: MessageSemantics.kindChat)
-            let keys: [String: TimelineHistoryOrderKey] = [
-                older.messageIdHex: orderKey(older.messageIdHex, epoch: 2, timelineAt: 100),
-                newer.messageIdHex: orderKey(newer.messageIdHex, epoch: 2, timelineAt: 200),
-            ]
-            let sleeper = ControlledSleeper()
-            let markEntered = TestLatch()
-            let markRelease = TestLatch()
-            var markedIds: [String] = []
-            let marker = ConversationReadMarker(
-                groupIdHex: hex("aa"),
-                appState: appState,
-                orderKey: { keys[$0] },
-                onChatListRowUpdated: nil,
-                sleep: { try await sleeper.sleep($0) },
-                markRead: { _, _, _, ids in
-                    markedIds.append(contentsOf: ids)
-                    markEntered.signal()
-                    try await markRelease.wait()
-                    return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
-                }
-            )
+        // Open directly into an older historical page (`hasMoreAfter: true`)
+        // that excludes both the persisted marker (`c2`) and `firstUnread`.
+        marker.seedFlushedWatermark(
+            messageIdHex: hex("c2"),
+            unreadCount: 2,
+            firstUnreadMessageIdHex: firstUnread.messageIdHex,
+            hasMoreAfter: true
+        )
+        marker.advanceWatermark(to: older, isDeleted: false)
+        await Task.yield()
+        #expect(sleeper.requestedDelays.isEmpty)
+        #expect(markedIds.isEmpty)
 
-            marker.advanceWatermark(to: newer, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await markEntered.wait()
+        // When the live tail loads with `firstUnread` in the window, rows
+        // before `firstUnread` remain blocked while `firstUnread` and newer
+        // live-tail rows are canonically admitted.
+        keys[firstUnread.messageIdHex] = orderKey(firstUnread.messageIdHex, epoch: 3, timelineAt: 250)
+        keys[liveTail.messageIdHex] = orderKey(liveTail.messageIdHex, epoch: 3, timelineAt: 300)
+        marker.seedFlushedWatermark(
+            messageIdHex: hex("c2"),
+            unreadCount: 2,
+            firstUnreadMessageIdHex: firstUnread.messageIdHex,
+            hasMoreAfter: false
+        )
+        marker.advanceWatermark(to: older, isDeleted: false)
+        await Task.yield()
+        #expect(sleeper.requestedDelays.isEmpty)
 
-            // Scrolling up to an older row while the newer mark is in flight must
-            // not enqueue or flush the older row.
-            marker.advanceWatermark(to: older, isDeleted: false)
-            markRelease.signal()
-            await Task.yield()
-            await Task.yield()
-            #expect(sleeper.requestedDelays.count == 1)
-            #expect(markedIds == [newer.messageIdHex])
-        }
-    }
-
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func retiredFlushAfterSuspensionCannotClobberResumedFlushState() async throws {
-        try await withTestClient { client in
-            let appState = readMarkerAppState(client: client)
-            appState.activeAccountRef = "acct-1"
-            let older = message(id: hex("e1"), kind: MessageSemantics.kindChat)
-            let first = message(id: hex("e2"), kind: MessageSemantics.kindChat)
-            let second = message(id: hex("e3"), kind: MessageSemantics.kindChat)
-            let keys: [String: TimelineHistoryOrderKey] = [
-                older.messageIdHex: orderKey(older.messageIdHex, epoch: 1, timelineAt: 100),
-                first.messageIdHex: orderKey(first.messageIdHex, epoch: 1, timelineAt: 200),
-                second.messageIdHex: orderKey(second.messageIdHex, epoch: 1, timelineAt: 300),
-            ]
-            let sleeper = ControlledSleeper()
-            let flush1Entered = TestLatch()
-            let flush1Release = TestLatch()
-            let flush2Entered = TestLatch()
-            let flush2Release = TestLatch()
-            var markedIds: [String] = []
-            var callCount = 0
-            let marker = ConversationReadMarker(
-                groupIdHex: hex("aa"),
-                appState: appState,
-                orderKey: { keys[$0] },
-                onChatListRowUpdated: nil,
-                sleep: { try await sleeper.sleep($0) },
-                markRead: { _, _, _, ids in
-                    callCount += 1
-                    let currentCall = callCount
-                    markedIds.append(contentsOf: ids)
-                    if currentCall == 1 {
-                        flush1Entered.signal()
-                        try? await flush1Release.wait()
-                        return ids.map {
-                            TimelineReadMarkResult(
-                                messageIdHex: $0,
-                                row: nil,
-                                succeeded: false,
-                                failureCategory: "storage_closed"
-                            )
-                        }
-                    }
-                    flush2Entered.signal()
-                    try? await flush2Release.wait()
-                    return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
-                }
-            )
-
-            // Start flush #1 and hold it in flight.
-            marker.advanceWatermark(to: first, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await flush1Entered.wait()
-
-            // Suspend mid-flight, then resume with a newer candidate starting flush #2.
-            marker.suspendPendingReadMarks()
-            marker.advanceWatermark(to: second, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await flush2Entered.wait()
-
-            // Retired flush #1 finishes with a failure while flush #2 is still in flight.
-            // It must neither clear flush #2's in-flight floor nor requeue `first`.
-            flush1Release.signal()
-            await Task.yield()
-            await Task.yield()
-
-            marker.advanceWatermark(to: older, isDeleted: false)
-            flush2Release.signal()
-            await Task.yield()
-            await Task.yield()
-
-            #expect(markedIds == [first.messageIdHex, second.messageIdHex])
-            #expect(sleeper.requestedDelays.count == 2)
-        }
-    }
-
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func historicalPageExcludingPersistedMarkerDoesNotRegressReadMark() async throws {
-        try await withTestClient { client in
-            let appState = readMarkerAppState(client: client)
-            appState.activeAccountRef = "acct-1"
-            let older = message(id: hex("c1"), kind: MessageSemantics.kindChat)
-            let firstUnread = message(id: hex("c3"), kind: MessageSemantics.kindChat)
-            let liveTail = message(id: hex("c4"), kind: MessageSemantics.kindChat)
-            var keys: [String: TimelineHistoryOrderKey] = [
-                older.messageIdHex: orderKey(older.messageIdHex, epoch: 1, timelineAt: 50),
-            ]
-            let sleeper = ControlledSleeper()
-            var markedIds: [String] = []
-            let marker = ConversationReadMarker(
-                groupIdHex: hex("aa"),
-                appState: appState,
-                orderKey: { keys[$0] },
-                onChatListRowUpdated: nil,
-                sleep: { try await sleeper.sleep($0) },
-                markRead: { _, _, _, ids in
-                    markedIds.append(contentsOf: ids)
-                    return ids.map { TimelineReadMarkResult(messageIdHex: $0, row: nil, succeeded: true) }
-                }
-            )
-
-            // Open directly into an older historical page (`hasMoreAfter: true`)
-            // that excludes both the persisted marker (`c2`) and `firstUnread`.
-            marker.seedFlushedWatermark(
-                messageIdHex: hex("c2"),
-                unreadCount: 2,
-                firstUnreadMessageIdHex: firstUnread.messageIdHex,
-                hasMoreAfter: true
-            )
-            marker.advanceWatermark(to: older, isDeleted: false)
-            await Task.yield()
-            #expect(sleeper.requestedDelays.isEmpty)
-            #expect(markedIds.isEmpty)
-
-            // When the live tail loads with `firstUnread` in the window, rows
-            // before `firstUnread` remain blocked while `firstUnread` and newer
-            // live-tail rows are canonically admitted.
-            keys[firstUnread.messageIdHex] = orderKey(firstUnread.messageIdHex, epoch: 3, timelineAt: 250)
-            keys[liveTail.messageIdHex] = orderKey(liveTail.messageIdHex, epoch: 3, timelineAt: 300)
-            marker.seedFlushedWatermark(
-                messageIdHex: hex("c2"),
-                unreadCount: 2,
-                firstUnreadMessageIdHex: firstUnread.messageIdHex,
-                hasMoreAfter: false
-            )
-            marker.advanceWatermark(to: older, isDeleted: false)
-            await Task.yield()
-            #expect(sleeper.requestedDelays.isEmpty)
-
-            marker.advanceWatermark(to: liveTail, isDeleted: false)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await eventually { markedIds == [liveTail.messageIdHex] && sleeper.sleepingCount == 0 }
-        }
+        marker.advanceWatermark(to: liveTail, isDeleted: false)
+        try await eventually { sleeper.sleepingCount == 1 }
+        sleeper.releaseAll()
+        try await eventually { markedIds == [liveTail.messageIdHex] && sleeper.sleepingCount == 0 }
     }
 
     @Test func newestVisibleWatermarkCandidateIgnoresVisibilityOrder() {
