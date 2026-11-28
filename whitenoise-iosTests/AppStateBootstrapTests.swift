@@ -77,7 +77,7 @@ struct AppStateBootstrapTests {
         let wipedAccount = try await appState.createIdentity()
         let client = try #require(appState.client)
         let importedSnapshot = try await client.marmot.beginOnboarding(
-            nsec: "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn",
+            nsec: TestKeys.randomNsec(),
             options: AccountSetupOptions.importOptions(runtimeRelays: client.relayUrls)
         )
         survivingAccountID.withLock { $0 = importedSnapshot.accountIdHex }
@@ -760,12 +760,11 @@ struct AppStateBootstrapTests {
         let activation = appState.startForegroundActivation()
         try await rebuildEntered.wait()
 
+        let nsec = TestKeys.randomNsec()
         let importFinished = TestLatch()
         let importTask = Task { @MainActor in
             defer { importFinished.signal() }
-            try await appState.importIdentity(
-                "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5"
-            )
+            try await appState.importIdentity(nsec)
         }
         try await importFinished.wait()
         await #expect(throws: ForegroundRuntimeMutationError.self) {
@@ -782,9 +781,7 @@ struct AppStateBootstrapTests {
         // Even once the runtime is rebuilt for retry, sign-in and identity
         // creation remain blocked until erasure recovery finishes.
         await #expect(throws: ForegroundRuntimeMutationError.self) {
-            try await appState.importIdentity(
-                "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5"
-            )
+            try await appState.importIdentity(nsec)
         }
         await #expect(throws: ForegroundRuntimeMutationError.self) {
             try await appState.createIdentity()
@@ -1315,9 +1312,7 @@ struct AppStateBootstrapTests {
         let appState = try testAppState()
         appState.setAppSceneActive(true)
         await appState.bootstrap()
-        let summary = try await appState.importIdentity(
-            "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn"
-        )
+        let summary = try await appState.importIdentity(TestKeys.randomNsec())
         let setup = try #require(appState.pendingAccountSetup)
         #expect(setup.accountID == summary.accountIdHex)
         #expect(!setup.snapshot.ready)
@@ -1344,9 +1339,7 @@ struct AppStateBootstrapTests {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
         let active = appState.activeAccountRef
-        _ = try await appState.importIdentity(
-            "nsec12kcgs78l06p30jz7z7h3n2x2cy99nw2z6zspjdp7qc206887mwvs95lnkx"
-        )
+        _ = try await appState.importIdentity(TestKeys.randomNsec())
         try await appState.refreshAccounts(refreshUnreadSummaries: false)
         #expect(appState.pendingAccountSetup != nil)
         #expect(appState.activeAccountRef == active)
@@ -1368,9 +1361,7 @@ struct AppStateBootstrapTests {
         let refresh = Task { try await appState.refreshAccounts(refreshUnreadSummaries: false) }
         await checkpoint.waitUntilPaused()
         reads.beforeOnboardingSnapshot = nil
-        _ = try await appState.importIdentity(
-            "nsec12kcgs78l06p30jz7z7h3n2x2cy99nw2z6zspjdp7qc206887mwvs95lnkx"
-        )
+        _ = try await appState.importIdentity(TestKeys.randomNsec())
         let imported = try #require(appState.pendingAccountSetup)
         await checkpoint.release()
         try await refresh.value
@@ -1521,9 +1512,7 @@ struct AppStateBootstrapTests {
         let seeded = try await readyAppStateWithCreatedIdentities(refreshReads: reads)
         let appState = seeded.appState
         let healthy = seeded.accounts[0]
-        let broken = try await appState.importIdentity(
-            "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn"
-        )
+        let broken = try await appState.importIdentity(TestKeys.randomNsec())
         reads.beforeOnboardingSnapshot = { accountID in
             if accountID == broken.accountIdHex { throw error }
         }
@@ -1552,9 +1541,7 @@ struct AppStateBootstrapTests {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let original = seeded.appState
         let healthy = seeded.accounts[0]
-        let broken = try await original.importIdentity(
-            "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn"
-        )
+        let broken = try await original.importIdentity(TestKeys.randomNsec())
         let root = try #require(original.client?.rootPath)
         let relays = try #require(original.client?.relayUrls)
         original.setAppSceneActive(false)
@@ -1718,12 +1705,8 @@ struct AppStateBootstrapTests {
         let appState = try testAppState()
         appState.setAppSceneActive(true)
         await appState.bootstrap()
-        let first = try await appState.importIdentity(
-            "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn"
-        )
-        let second = try await appState.importIdentity(
-            "nsec12kcgs78l06p30jz7z7h3n2x2cy99nw2z6zspjdp7qc206887mwvs95lnkx"
-        )
+        let first = try await appState.importIdentity(TestKeys.randomNsec())
+        let second = try await appState.importIdentity(TestKeys.randomNsec())
         let client = try #require(appState.client)
         try await client.marmot.removeAccount(accountRef: second.accountIdHex)
         try await appState.refreshAccounts(refreshUnreadSummaries: false)

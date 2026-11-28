@@ -1046,7 +1046,7 @@ struct AccountSetupRuntimeTests {
         try await withTestClient { client in
             try await client.startRuntime()
             let initial = try await client.marmot.beginOnboarding(
-                nsec: "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn",
+                nsec: TestKeys.randomNsec(),
                 options: OnboardingOptionsFfi(defaultRelays: ["wss://relay.invalid.test"], discoveryRelays: ["wss://relay.invalid.test"])
             )
             let subscription = try await MarmotAccountSetupClient(client: client, accountID: initial.accountIdHex).subscribe()
