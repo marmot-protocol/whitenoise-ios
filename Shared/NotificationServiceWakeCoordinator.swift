@@ -271,8 +271,8 @@ nonisolated final class NotificationServiceWakeCoordinator: Sendable {
         private let storage = Mutex<QueueState>(QueueState())
 
         func withLock<Result: ~Copyable>(
-            _ body: (inout QueueState) -> Result
-        ) -> Result {
+            _ body: (inout sending QueueState) -> sending Result
+        ) -> sending Result {
             storage.withLock(body)
         }
     }

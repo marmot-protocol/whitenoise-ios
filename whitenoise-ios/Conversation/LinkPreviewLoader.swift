@@ -31,7 +31,7 @@ enum LinkPreviewLoader {
     /// Thread-safe waiter set so `withTaskCancellationHandler.onCancel` removes
     /// a cancelled waiter and cancels the underlying task synchronously without
     /// waiting for a MainActor hop that could race a limiter permit release.
-    private final class WaiterState: Sendable {
+    nonisolated private final class WaiterState: Sendable {
         private struct State {
             var waiters: Set<UUID>
             var cancelled: Bool
