@@ -79,23 +79,11 @@ struct WelcomeView: View {
                         .anchorPreference(key: WelcomeBrandBoundsKey.self, value: .bounds) { $0 }
                         .padding(.top, markTop)
 
-                    if showsTermsAgreement {
-                        VStack(spacing: 8) {
-                            Text("Welcome to White Noise")
-                                .font(.title.bold())
-                                .multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            Text("By continuing, you agree to our [Terms of Service](https://whitenoise.chat/terms) and [Acceptable Use Policy](https://whitenoise.chat/terms#section-7).")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.horizontal, 16)
-                                .accessibilityIdentifier("welcome.terms")
-                        }
+                    Text("Welcome to White Noise")
+                        .font(.title.bold())
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 32)
-                    }
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 32)
@@ -166,24 +154,29 @@ struct WelcomeView: View {
     }
 
     private var welcomeActions: some View {
-        Group {
-            if !showsTermsAgreement {
-                actionLayout {
-                    WNButton(title: "Sign In", emphasis: .secondary) { open(.signIn) }
-                        .accessibilityIdentifier("welcome.sign-in")
-                    WNButton(title: "Sign Up") { open(.signUp) }
-                        .accessibilityIdentifier("welcome.sign-up")
-                }
-            } else {
-                WNButton(title: "Agree & Continue") {
-                    hasAcceptedTerms = true
-                }
-                .accessibilityIdentifier("welcome.agree-and-continue")
+        VStack(spacing: 12) {
+            if showsTermsAgreement {
+                Text("By continuing (Sign In or Sign Up), you agree to our [Terms of Service](https://whitenoise.chat/terms) and [Acceptable Use Policy](https://whitenoise.chat/terms#section-7).")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("welcome.terms")
+            }
+
+            actionLayout {
+                WNButton(title: "Sign In", emphasis: .secondary) { open(.signIn) }
+                    .accessibilityIdentifier("welcome.sign-in")
+                WNButton(title: "Sign Up") { open(.signUp) }
+                    .accessibilityIdentifier("welcome.sign-up")
             }
         }
     }
 
     private func open(_ route: SheetRoute) {
+        // Either account button accepts the terms; opening a policy link does not reach here.
+        hasAcceptedTerms = true
         let path: ProductOnboardingPath = route == .signIn ? .import : .create
         appState.beginProductOnboarding(path)
         selectedSheetDetent = route == .signIn ? .medium : .large
