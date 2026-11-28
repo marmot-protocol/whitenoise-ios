@@ -78,18 +78,21 @@ jobs:
         with:
           xcode-version: "27"
 
-      # Extracting the compiler cache ran out of disk alongside the image's
-      # unused Xcodes, simulator runtimes and toolchains, so drop them first.
+      # Extracting the compiler cache previously ran out of disk on tighter images.
+      # Skip cleanup when 30 GiB+ is already free; #1378 confirmed deleting unused
+      # simulator runtimes is unnecessary and costs ~1.5-2 min per run.
       - name: Free runner disk
         run: |
           df -h /
+          free_kb=$(df -Pk / | awk 'NR==2 {print $4}')
+          if [ "$free_kb" -ge 31457280 ]; then
+            echo "Skipping disk cleanup: $((free_kb / 1048576)) GiB free (>= 30 GiB)."
+            exit 0
+          fi
           keep="$(dirname "$(dirname "$(xcode-select -p)")")"
           for x in /Applications/Xcode*.app; do
             [ "$(cd "$x" && pwd -P)" = "$(cd "$keep" && pwd -P)" ] || sudo rm -rf "$x" &
           done
-          xcrun simctl runtime list -j \
-            | python3 -c 'import json,sys; [print(k) for k,v in json.load(sys.stdin).items() if not v["platformIdentifier"].endswith("iphonesimulator") or not v["version"].startswith("27")]' \
-            | xargs -n1 xcrun simctl runtime delete || true
           sudo rm -rf ~/Library/Android /usr/local/share/dotnet ~/.ghcup &
           wait
           df -h /
@@ -110,12 +113,13 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests
 
       # The MarmotKit binary target is a 74 MB download that unpacks to 254 MB.
-      # It only changes when the pinned release does, so key it on the manifest.
+      # Key on both the MarmotKit manifest and Package.resolved so Stripe/SPM
+      # updates invalidate stale checkouts too.
       - name: Cache Swift package artifacts
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: build/SourcePackages
-          key: spm-${{ runner.os }}-${{ runner.arch }}-xcode${{ steps.xcode.outputs.version }}-${{ hashFiles('Packages/MarmotKit/Package.swift') }}
+          key: spm-${{ runner.os }}-${{ runner.arch }}-xcode${{ steps.xcode.outputs.version }}-${{ hashFiles('Packages/MarmotKit/Package.swift', 'whitenoise-ios.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
             spm-${{ runner.os }}-${{ runner.arch }}-xcode${{ steps.xcode.outputs.version }}-
 
