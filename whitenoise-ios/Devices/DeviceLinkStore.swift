@@ -91,13 +91,16 @@ final class DeviceLinkStore {
     /// The latest read of each other profile's requests; an older read that
     /// finishes later is dropped.
     private var otherProfileTickets: [String: UUID] = [:]
+    @ObservationIgnored private let calls: DeviceLinkCalls
     @ObservationIgnored private let readDeviceLinkSnapshot: DeviceLinkSnapshotReader
 
     init(
+        calls: DeviceLinkCalls = DeviceLinkCalls(),
         readDeviceLinkSnapshot: @escaping DeviceLinkSnapshotReader = { client, accountRef in
             try await client.marmot.deviceLinkSnapshot(accountRef: accountRef)
         }
     ) {
+        self.calls = calls
         self.readDeviceLinkSnapshot = readDeviceLinkSnapshot
     }
 
@@ -171,7 +174,7 @@ final class DeviceLinkStore {
     func reviewOtherProfileRequest(_ request: OtherProfileLinkRequest, using appState: AppState) async {
         dismissedOtherProfilePromptIDs.insert(request.promptID)
         promptAfterSwitch = request
-        await appState.activateAccount(request.accountRef)
+        await calls.activateAccount(appState, request.accountRef)
         guard appState.activeAccount?.accountIdHex == request.accountIdHex else {
             // The switch didn't happen; keep offering the request.
             if promptAfterSwitch == request { promptAfterSwitch = nil }
@@ -345,14 +348,14 @@ final class DeviceLinkStore {
         do {
             switch part {
             case .snapshot:
-                let next = try await marmot.deviceLinkSnapshot(accountRef: account)
+                let next = try await readDeviceLinkSnapshot(client, account)
                 guard current() else { return }
                 apply(next)
             case .devices:
-                let next = try await marmot.linkedDevices(accountRef: account)
-                async let closed = marmot.chatsClosedToLinkedDevices(accountRef: account)
-                async let leftover = marmot.removedDeviceLeftoverChats(accountRef: account)
-                async let fresh = marmot.startedFresh(accountRef: account)
+                let next = try await calls.linkedDevices(marmot, account)
+                async let closed = calls.chatsClosed(marmot, account)
+                async let leftover = calls.leftoverChats(marmot, account)
+                async let fresh = calls.startedFresh(marmot, account)
                 let counts = (try? await closed, try? await leftover, try? await fresh)
                 guard current() else { return }
                 devices = next
@@ -362,20 +365,20 @@ final class DeviceLinkStore {
                 startedFresh = counts.2 ?? false
                 await applyPendingOwnLabel(using: appState)
             case .signIns:
-                let next = try await marmot.unrecognizedSignIns(accountRef: account)
+                let next = try await calls.signIns(marmot, account)
                 guard current() else { return }
                 signIns = next
                 signInsLoadError = nil
             case .compromise:
-                let next = try await marmot.compromiseWarning(accountRef: account)
+                let next = try await calls.compromiseWarning(marmot, account)
                 guard current() else { return }
                 compromiseWarning = next
             case .keyPackage:
-                let next = try await marmot.keyPackageRefreshOverdue(accountRef: account)
+                let next = try await calls.keyPackageOverdue(marmot, account)
                 guard current() else { return }
                 keyPackageRefreshOverdue = next
             case .historyImports:
-                let next = try await marmot.chatHistoryImports(accountRef: account)
+                let next = try await calls.historyImports(marmot, account)
                 guard current() else { return }
                 historyImports = Dictionary(next.map { ($0.groupIdHex, $0.state) }, uniquingKeysWith: { _, last in last })
             }
@@ -502,10 +505,10 @@ final class DeviceLinkStore {
         // never published for a profile the user switched to meanwhile.
         try await mutateSnapshot(using: appState) { marmot, account in
             do {
-                return try await marmot.startDeviceLink(accountRef: account)
+                return try await self.calls.startLink(marmot, account)
             } catch where DeviceGroupRefusal(error: error)?.reason == "key_package_not_published" {
-                _ = try await marmot.rotateKeyPackage(accountRef: account)
-                return try await marmot.startDeviceLink(accountRef: account)
+                try await self.calls.rotateKeyPackage(marmot, account)
+                return try await self.calls.startLink(marmot, account)
             }
         }
     }
@@ -533,10 +536,7 @@ final class DeviceLinkStore {
         if let thisDeviceLabel { pendingOwnLabel = thisDeviceLabel }
         do {
             try await mutateSnapshot(using: appState) { marmot, account in
-                try await marmot.linkDevice(
-                    accountRef: account, promptId: promptID, label: label,
-                    addToAllChats: addToAllChats, bringHistory: bringHistory
-                )
+                try await self.calls.link(marmot, account, promptID, label, addToAllChats, bringHistory)
             }
         } catch {
             // Only this profile's name, and only if this call wrote it.
@@ -560,7 +560,7 @@ final class DeviceLinkStore {
         func finish() { if self.scope == scope, pendingOwnLabel == label { pendingOwnLabel = nil } }
         do {
             try await mutate(in: scope, using: appState) { marmot, account in
-                try await marmot.renameLinkedDevice(accountRef: account, slotIdHex: me.slotIdHex, label: label)
+                try await self.calls.rename(marmot, account, me.slotIdHex, label)
             }
             finish()
         } catch where DeviceGroupRefusal(error: error)?.reason == "device_group_busy" {
@@ -579,7 +579,7 @@ final class DeviceLinkStore {
 
     func rename(slotIdHex: String, label: String, using appState: AppState) async throws {
         try await mutate(using: appState) { marmot, account in
-            try await marmot.renameLinkedDevice(accountRef: account, slotIdHex: slotIdHex, label: label)
+            try await self.calls.rename(marmot, account, slotIdHex, label)
         }
         await refresh(.devices, using: appState)
     }
@@ -696,7 +696,7 @@ final class DeviceLinkStore {
         let (next, rotationError) = try await mutate(in: scope, using: appState) { marmot, account in
             let next = try await marmot.resetDeviceGroupForRepair(accountRef: account)
             do {
-                _ = try await marmot.rotateKeyPackage(accountRef: account)
+                try await self.calls.rotateKeyPackage(marmot, account)
                 return (next, Error?.none)
             } catch {
                 return (next, Error?.some(error))
