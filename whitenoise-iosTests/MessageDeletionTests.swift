@@ -88,8 +88,7 @@ struct MessageDeletionTests {
         #expect(MessageTombstonePresentation.showsDeliveryStatus(isDeleted: false))
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func viewModelCapabilityIsAvailableForIngestedMessages() async throws {
+    @Test func viewModelCapabilityIsAvailableForIngestedMessages() async throws {
         // Positive regression coverage for delete availability through the
         // full view-model wiring: an ingested message must surface delete
         // scopes. The pure-policy positives alone let a wiring break hide.
@@ -103,37 +102,35 @@ struct MessageDeletionTests {
         // delete capability unavailable. This deterministic fixture is the
         // permanent guard — it needs no account transport.
         let group = groupRecord(id: String(repeating: "ab", count: 16), name: "Availability", admins: [me])
-        try await withTestClient { client in
-            let appState = try appState(accountRef: accountRef, accountIdHex: me, client: client)
-            let viewModel = ConversationViewModel(appState: appState, group: group)
+        let appState = try appState(accountRef: accountRef, accountIdHex: me)
+        let viewModel = ConversationViewModel(appState: appState, group: group)
 
-            let mine = appRecord(id: hex("44"), groupId: group.groupIdHex, sender: me, direction: "sent")
-            let theirs = appRecord(id: hex("55"), groupId: group.groupIdHex, sender: other, direction: "received")
-            let page = TimelinePageFfi(
-                messages: [
-                    timelineRecord(id: mine.messageIdHex, groupId: group.groupIdHex, sender: me, at: 1),
-                    timelineRecord(id: theirs.messageIdHex, groupId: group.groupIdHex, sender: other, at: 2),
-                ],
-                hasMoreBefore: false,
-                hasMoreAfter: false
-            )
-            viewModel.applyTimelinePage(page, placement: .window)
+        let mine = appRecord(id: hex("44"), groupId: group.groupIdHex, sender: me, direction: "sent")
+        let theirs = appRecord(id: hex("55"), groupId: group.groupIdHex, sender: other, direction: "received")
+        let page = TimelinePageFfi(
+            messages: [
+                timelineRecord(id: mine.messageIdHex, groupId: group.groupIdHex, sender: me, at: 1),
+                timelineRecord(id: theirs.messageIdHex, groupId: group.groupIdHex, sender: other, at: 2),
+            ],
+            hasMoreBefore: false,
+            hasMoreAfter: false
+        )
+        viewModel.applyTimelinePage(page, placement: .window)
 
-            // Own message in a named group: both scopes.
-            let mineCapability = viewModel.deleteCapability(for: mine)
-            #expect(mineCapability.canDeleteForMe)
-            #expect(mineCapability.canDeleteForEveryone)
+        // Own message in a named group: both scopes.
+        let mineCapability = viewModel.deleteCapability(for: mine)
+        #expect(mineCapability.canDeleteForMe)
+        #expect(mineCapability.canDeleteForEveryone)
 
-            // Another member's message, while self is admin: moderation scope.
-            let theirsCapability = viewModel.deleteCapability(for: theirs)
-            #expect(theirsCapability.canDeleteForMe)
-            #expect(theirsCapability.canDeleteForEveryone)
-            #expect(viewModel.canModerateReports)
-            #expect(viewModel.canReport(theirs))
-            appState.activeAccountRef = "replacement-account"
-            #expect(!viewModel.canModerateReports)
-            #expect(!viewModel.canReport(theirs))
-        }
+        // Another member's message, while self is admin: moderation scope.
+        let theirsCapability = viewModel.deleteCapability(for: theirs)
+        #expect(theirsCapability.canDeleteForMe)
+        #expect(theirsCapability.canDeleteForEveryone)
+        #expect(viewModel.canModerateReports)
+        #expect(viewModel.canReport(theirs))
+        appState.activeAccountRef = "replacement-account"
+        #expect(!viewModel.canModerateReports)
+        #expect(!viewModel.canReport(theirs))
     }
 
     @Test(.marmotRuntimeConcurrencyLimit)
@@ -506,45 +503,42 @@ struct MessageDeletionTests {
         #expect(store.replyPreview(for: replyRecord)?.text == "This message was deleted")
     }
 
-    @Test(.marmotRuntimeConcurrencyLimit)
-    func deleteForMePublishesNothingAndSurvivesViewModelRecreation() async throws {
+    @Test func deleteForMePublishesNothingAndSurvivesViewModelRecreation() async throws {
         let accountRef = "delete-local-\(UUID().uuidString)"
         let me = hex("11")
         let group = groupRecord(id: hex("aa"), name: "Local delete test")
-        try await withTestClient { client in
-            let appState = try appState(accountRef: accountRef, accountIdHex: me, client: client)
-            var remoteDeleteCalls = 0
-            let operation: ConversationViewModel.DeleteMessageOperation = { _, _, _, _ in
-                remoteDeleteCalls += 1
-                return SendSummaryFfi(published: 1, messageIds: [])
-            }
-            let message = appRecord(id: hex("44"), groupId: group.groupIdHex, sender: hex("22"), direction: "received")
-            let page = TimelinePageFfi(
-                messages: [timelineRecord(id: message.messageIdHex, groupId: group.groupIdHex, sender: message.sender, at: 1)],
-                hasMoreBefore: false,
-                hasMoreAfter: false
-            )
-            defer { MessageHideStore.clearAll(accountRef: accountRef) }
-
-            let first = ConversationViewModel(
-                appState: appState,
-                group: group,
-                deleteMessageOperation: operation
-            )
-            first.applyTimelinePage(page, placement: .window)
-            #expect(await first.deleteMessageForMe(message))
-            #expect(first.timeline.isEmpty)
-            #expect(remoteDeleteCalls == 0)
-
-            let recreated = ConversationViewModel(
-                appState: appState,
-                group: group,
-                deleteMessageOperation: operation
-            )
-            recreated.applyTimelinePage(page, placement: .window)
-            #expect(recreated.timeline.isEmpty)
-            #expect(remoteDeleteCalls == 0)
+        let appState = try appState(accountRef: accountRef, accountIdHex: me)
+        var remoteDeleteCalls = 0
+        let operation: ConversationViewModel.DeleteMessageOperation = { _, _, _, _ in
+            remoteDeleteCalls += 1
+            return SendSummaryFfi(published: 1, messageIds: [])
         }
+        let message = appRecord(id: hex("44"), groupId: group.groupIdHex, sender: hex("22"), direction: "received")
+        let page = TimelinePageFfi(
+            messages: [timelineRecord(id: message.messageIdHex, groupId: group.groupIdHex, sender: message.sender, at: 1)],
+            hasMoreBefore: false,
+            hasMoreAfter: false
+        )
+        defer { MessageHideStore.clearAll(accountRef: accountRef) }
+
+        let first = ConversationViewModel(
+            appState: appState,
+            group: group,
+            deleteMessageOperation: operation
+        )
+        first.applyTimelinePage(page, placement: .window)
+        #expect(await first.deleteMessageForMe(message))
+        #expect(first.timeline.isEmpty)
+        #expect(remoteDeleteCalls == 0)
+
+        let recreated = ConversationViewModel(
+            appState: appState,
+            group: group,
+            deleteMessageOperation: operation
+        )
+        recreated.applyTimelinePage(page, placement: .window)
+        #expect(recreated.timeline.isEmpty)
+        #expect(remoteDeleteCalls == 0)
     }
 
     @Test(.marmotRuntimeConcurrencyLimit)

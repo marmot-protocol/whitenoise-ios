@@ -567,7 +567,7 @@ struct MediaAcquisitionIntentTests {
             )
             // Requesting playback for an unavailable/revoked slot must fail
             // through MDK authorization rather than returning primed plaintext.
-            await #expect(throws: Error.self) {
+            await #expect(throws: AttachmentReadError.unavailable) {
                 _ = try await client.acquireAttachmentPlaybackFile(
                     accountRef: account.label,
                     groupID: String(repeating: "ab", count: 32),

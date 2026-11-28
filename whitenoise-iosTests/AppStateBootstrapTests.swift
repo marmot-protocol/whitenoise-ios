@@ -114,7 +114,7 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
-    @Test func eraseAppDataWhenBackgroundedKeepsSQLCipherClosedAndRecoversOnForeground() async throws {
+    @Test(.sharedAvatarCacheAccess) func eraseAppDataWhenBackgroundedKeepsSQLCipherClosedAndRecoversOnForeground() async throws {
         let rebuildCount = Mutex(0)
         let factory: RuntimeLifecycle.RuntimeClientFactory = { rootPath, relayUrls, cursorPersistence, telemetryConfig in
             rebuildCount.withLock { $0 += 1 }
@@ -191,7 +191,7 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
-    @Test func closeForAppErasureDoesNotDeadlockWithBackgroundSuspension() async throws {
+    @Test(.sharedAvatarCacheAccess) func closeForAppErasureDoesNotDeadlockWithBackgroundSuspension() async throws {
         let closeEntered = TestLatch()
         let closeRelease = TestLatch()
         defer { closeRelease.signal() }
@@ -290,7 +290,7 @@ struct AppStateBootstrapTests {
         #expect(appState.runtimeSuspendedForBackground)
     }
 
-    @Test(arguments: [false, true])
+    @Test(.sharedAvatarCacheAccess, arguments: [false, true])
     func inactiveErasureFailureParksStorageCloseBehindTrackedSuspension(
         returnToForeground: Bool
     ) async throws {
@@ -412,7 +412,7 @@ struct AppStateBootstrapTests {
         await appState.startRuntimeSuspension().value
     }
 
-    @Test(arguments: [false, true])
+    @Test(.sharedAvatarCacheAccess, arguments: [false, true])
     func foregroundErasureRecoveryWaitsForInFlightBackgroundCloseBeforeRebuilding(
         foregroundAfterErasureStartsWaiting: Bool
     ) async throws {
@@ -500,7 +500,7 @@ struct AppStateBootstrapTests {
         await appState.startRuntimeSuspension().value
     }
 
-    @Test func failedRecoveryRetryKeepsRecoverySheetLatchedDuringRuntimeRebuild() async throws {
+    @Test(.sharedAvatarCacheAccess) func failedRecoveryRetryKeepsRecoverySheetLatchedDuringRuntimeRebuild() async throws {
         let rebuildCount = Mutex(0)
         let rebuildEntered = TestLatch()
         let rebuildRelease = TestLatch()
@@ -585,7 +585,7 @@ struct AppStateBootstrapTests {
         await appState.startRuntimeSuspension().value
     }
 
-    @Test func failedRecoveryRetryKeepsSheetMountedWhenSceneStaysInactive() async throws {
+    @Test(.sharedAvatarCacheAccess) func failedRecoveryRetryKeepsSheetMountedWhenSceneStaysInactive() async throws {
         let rebuildEntered = TestLatch()
         let rebuildRelease = TestLatch()
         defer { rebuildRelease.signal() }
@@ -3004,7 +3004,12 @@ struct AppStateBootstrapTests {
     }
 
     @Test func backgroundSuspensionWaitsForDraftFlushBeforeClosingSQLCipher() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        // The drain timeout never fires: on a loaded machine the flush can
+        // outlast the real 2 s bound, which the stuck-lease test below covers.
+        let drainTimeout = ControlledSleeper()
+        let seeded = try await readyAppStateWithCreatedIdentities(
+            mutationDrainSleeper: { try await drainTimeout.sleep($0) }
+        )
         let appState = seeded.appState
         let account = seeded.accounts[0]
         let client = try #require(appState.client)
@@ -3357,7 +3362,7 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
-    @Test func backgroundErasureRecoveryBecomesActionableWhileEarlierCatchUpDrainIsStillHeld() async throws {
+    @Test(.sharedAvatarCacheAccess) func backgroundErasureRecoveryBecomesActionableWhileEarlierCatchUpDrainIsStillHeld() async throws {
         let catchUp = NotificationCatchUpStub()
         let catchUpCheckpoint = AsyncTestCheckpoint()
         let sleeperEntered = TestLatch()

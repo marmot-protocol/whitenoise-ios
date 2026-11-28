@@ -172,12 +172,6 @@ struct RuntimeOwnershipTests {
         await appState.startRuntimeSuspension().value
     }
 
-    @Test func initialSceneRuntimeActionDistinguishesBackgroundFromInactive() {
-        #expect(SceneRuntimeAction.resolve(.active) == .activate)
-        #expect(SceneRuntimeAction.resolve(.inactive) == .remainInactive)
-        #expect(SceneRuntimeAction.resolve(.background) == .suspend)
-    }
-
     @Test func coldBackgroundLaunchClosesRuntimeAfterBootstrap() async throws {
         var injectedClient: MarmotClient? = try TestRuntimeScope.own(
             MarmotClient.testClient(), ownsRoot: true, retainingClient: false)
@@ -447,28 +441,6 @@ struct RuntimeOwnershipTests {
             deployment: marmotDeploymentWhiteNoise()
         )
         try await replacement.shutdownAndClose()
-    }
-
-    // An ambiguous timeout must not be treated as "busy, safe to resubmit".
-    @Test func accountWorkerBusyClassifierExcludesAmbiguousTimeouts() {
-        #expect(MarmotKitError.AccountWorkerBusy.isAccountWorkerBusy)
-        #expect(!MarmotKitError.AccountWorkerBusy.isAccountWorkerResponseTimedOut)
-        #expect(MarmotKitError.AccountWorkerResponseTimedOut.isAccountWorkerResponseTimedOut)
-        #expect(!MarmotKitError.AccountWorkerResponseTimedOut.isAccountWorkerBusy)
-    }
-
-    @Test func notificationContentionUsesTypedImmediateFallbackClassification() {
-        #expect(MarmotKitError.RuntimeBusy.isRuntimeOwnershipContention)
-        #expect(!MarmotKitError.RuntimeStopping.isRuntimeOwnershipContention)
-    }
-
-    @Test func startupReadinessClassifierIsNarrowAndTyped() {
-        #expect(MarmotKitError.RuntimeBusy.isTransientStartupReadinessFailure)
-        #expect(MarmotKitError.StorageBusy(details: "busy").isTransientStartupReadinessFailure)
-        #expect(MarmotKitError.KeystoreUnavailable(details: "locked").isTransientStartupReadinessFailure)
-        #expect(!MarmotKitError.StorageClosed(details: "closed").isTransientStartupReadinessFailure)
-        #expect(!MarmotKitError.InvalidGroupMembershipPage(maxGroups: 100).isTransientStartupReadinessFailure)
-        #expect(!MarmotKitError.Io(details: "disk failed").isTransientStartupReadinessFailure)
     }
 
     @Test func notificationActionContentionFailsImmediatelyAndReleasesSuspensionGate() async throws {
@@ -2044,5 +2016,37 @@ struct RuntimeOwnershipTests {
         #expect(ephemeralClients.count == 2)
         #expect(ephemeralClients[1].marmot.storageIsClosed())
         #expect(scheduledFailureTitles.isEmpty)
+    }
+}
+
+/// Pure classifiers the runtime lifecycle branches on; no runtime, so no gate.
+@MainActor
+struct RuntimeLifecycleClassifierTests {
+    @Test func initialSceneRuntimeActionDistinguishesBackgroundFromInactive() {
+        #expect(SceneRuntimeAction.resolve(.active) == .activate)
+        #expect(SceneRuntimeAction.resolve(.inactive) == .remainInactive)
+        #expect(SceneRuntimeAction.resolve(.background) == .suspend)
+    }
+
+    // An ambiguous timeout must not be treated as "busy, safe to resubmit".
+    @Test func accountWorkerBusyClassifierExcludesAmbiguousTimeouts() {
+        #expect(MarmotKitError.AccountWorkerBusy.isAccountWorkerBusy)
+        #expect(!MarmotKitError.AccountWorkerBusy.isAccountWorkerResponseTimedOut)
+        #expect(MarmotKitError.AccountWorkerResponseTimedOut.isAccountWorkerResponseTimedOut)
+        #expect(!MarmotKitError.AccountWorkerResponseTimedOut.isAccountWorkerBusy)
+    }
+
+    @Test func notificationContentionUsesTypedImmediateFallbackClassification() {
+        #expect(MarmotKitError.RuntimeBusy.isRuntimeOwnershipContention)
+        #expect(!MarmotKitError.RuntimeStopping.isRuntimeOwnershipContention)
+    }
+
+    @Test func startupReadinessClassifierIsNarrowAndTyped() {
+        #expect(MarmotKitError.RuntimeBusy.isTransientStartupReadinessFailure)
+        #expect(MarmotKitError.StorageBusy(details: "busy").isTransientStartupReadinessFailure)
+        #expect(MarmotKitError.KeystoreUnavailable(details: "locked").isTransientStartupReadinessFailure)
+        #expect(!MarmotKitError.StorageClosed(details: "closed").isTransientStartupReadinessFailure)
+        #expect(!MarmotKitError.InvalidGroupMembershipPage(maxGroups: 100).isTransientStartupReadinessFailure)
+        #expect(!MarmotKitError.Io(details: "disk failed").isTransientStartupReadinessFailure)
     }
 }
