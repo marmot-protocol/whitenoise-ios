@@ -3,7 +3,8 @@ import Observation
 import MarmotKit
 
 /// The Marmot calls `ConversationViewModel` makes to send kind-1202 agent
-/// answers/controls and to read back uncertain admissions.
+/// answers/controls, read back uncertain admissions, and attribute settled
+/// kind-1202 requests to their sender.
 nonisolated struct AgentRequestCalls: Sendable {
     var sendCustomEvent: @MainActor (
         AppState, _ accountRef: String, _ groupIdHex: String, _ payload: AgentRequestPayload, _ clientToken: String
@@ -11,6 +12,16 @@ nonisolated struct AgentRequestCalls: Sendable {
     var localSendStatus: @MainActor (
         AppState, _ accountRef: String, _ groupIdHex: String, _ clientToken: String
     ) async throws -> LocalSendStatusFfi?
+    var loadKind1202Messages: @MainActor (
+        AppState, _ accountRef: String, _ groupIdHex: String, _ limit: UInt32?
+    ) async throws -> [AppMessageRecordFfi] = { appState, accountRef, groupIdHex, limit in
+        try await appState.currentMarmotClient().groupMessages(
+            accountRef: accountRef,
+            groupIdHex: groupIdHex,
+            limit: limit,
+            kinds: [MessageSemantics.kindAgentOperation]
+        )
+    }
 
     static let live = AgentRequestCalls(
         sendCustomEvent: { appState, accountRef, groupIdHex, payload, clientToken in
@@ -46,6 +57,7 @@ final class AgentInteractionStore {
     struct PendingRequest: Equatable, Sendable {
         let key: String
         let clientToken: String
+        let payload: AgentRequestPayload
         let summary: String
         let senderAccountIdHex: String
         var requestEventIdHex: String?
@@ -165,8 +177,11 @@ final class AgentInteractionStore {
 
     /// Sends a kind-1202 request, tracking it as pending until settled by an item's `settles`.
     /// When an error leaves admission ambiguous (such as cancellation or worker timeout),
-    /// probes `checkStatus` with the same `clientToken` before allowing a fresh submission
-    /// so retries never publish a duplicate kind-1202 request.
+    /// probes `checkStatus` with the same `clientToken` before resending:
+    /// - Confirmed admission recovers without sending again.
+    /// - Confirmed rejection allows minting a fresh token.
+    /// - A missing status (`nil`) never mints a fresh token; only retrying the exact
+    ///   same payload reuses the original `clientToken` (which MDK deduplicates).
     @discardableResult
     func submit(
         key: String,
@@ -176,24 +191,44 @@ final class AgentInteractionStore {
         checkStatus: LocalSendStatusOperation? = nil,
         send: SendCustomEventOperation
     ) async throws -> LocalSendAcceptanceFfi? {
+        var reusableToken: String?
         if let existing = pendingByKey[key], !existing.sendFailed {
             guard existing.statusUnknown, let checkStatus else {
                 return existing.requestEventIdHex.map {
                     LocalSendAcceptanceFfi(clientToken: existing.clientToken, messageIdHex: $0)
                 }
             }
-            if let resolved = await recheckStatus(forKey: key, checkStatus: checkStatus) {
+            let status: LocalSendStatusFfi?
+            do {
+                status = try await checkStatus(existing.clientToken)
+            } catch {
+                return nil
+            }
+            guard pendingByKey[key]?.clientToken == existing.clientToken else {
+                return nil
+            }
+            if let resolved = applySendStatus(
+                key: existing.key,
+                token: existing.clientToken,
+                senderAccountIdHex: existing.senderAccountIdHex,
+                status: status,
+                ambiguousWhenMissing: true
+            ) {
                 return resolved
             }
             if pendingByKey[key]?.sendFailed != true {
-                return nil
+                guard existing.payload == payload else {
+                    return nil
+                }
+                reusableToken = existing.clientToken
             }
         }
 
-        let token = UUID().uuidString
+        let token = reusableToken ?? UUID().uuidString
         let pending = PendingRequest(
             key: key,
             clientToken: token,
+            payload: payload,
             summary: summary,
             senderAccountIdHex: senderAccountIdHex,
             requestEventIdHex: nil,
@@ -240,7 +275,8 @@ final class AgentInteractionStore {
 
     /// Explicit follow-up status check for a request whose admission was left unknown.
     /// Returns a `LocalSendAcceptanceFfi` if MDK confirms admission; marks `sendFailed = true`
-    /// when MDK reports rejection or still has no record of the token.
+    /// only when MDK explicitly reports rejection. A missing status (`nil`) stays ambiguous so
+    /// a still-pending admission can never be duplicated with a second token.
     @discardableResult
     func recheckStatus(
         forKey key: String,
@@ -256,7 +292,7 @@ final class AgentInteractionStore {
                 token: existing.clientToken,
                 senderAccountIdHex: existing.senderAccountIdHex,
                 status: status,
-                ambiguousWhenMissing: false
+                ambiguousWhenMissing: true
             )
         } catch {
             return nil

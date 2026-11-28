@@ -913,6 +913,19 @@ final class TimelineStore {
         }
     }
 
+    /// Durable subagent-thread records withheld from the main `timeline`,
+    /// excluding blocked authors and locally hidden messages, so reading to
+    /// the tail of the main chat can still advance the read watermark past them.
+    func hiddenSubagentWatermarkCandidates() -> [AppMessageRecordFfi] {
+        subagentThreadIndex.hiddenFromMainTimeline.compactMap { messageId in
+            guard let record = messageById[messageId],
+                  !isBlockedAuthor(record.sender),
+                  !isHidden(record.messageIdHex)
+            else { return nil }
+            return record
+        }
+    }
+
     /// Active running main-chat turns, newest last (one per agent pubkey when running).
     func activeRunningTurns() -> [AgentItemProjection] {
         _ = timelineProjectionGeneration

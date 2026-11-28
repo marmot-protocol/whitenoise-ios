@@ -481,9 +481,6 @@ private struct AgentSubagentThreadContent: View {
                     } else {
                         ForEach(threadItems) { item in
                             threadRow(for: item)
-                                .onAppear {
-                                    viewModel.markSubagentThreadMessagesRead([item])
-                                }
                         }
                     }
                 }
@@ -619,43 +616,77 @@ private struct AgentSubagentThreadContent: View {
                 )
             } else {
                 // Subagent words (kind 1111 comment) or human reply in thread.
-                let isDeleted = viewModel.isDeleted(record.messageIdHex)
-                let isFromMe = MessageOwnership.isMine(
-                    direction: record.direction,
-                    sender: record.sender,
+                let display = AgentSubagentReplyPresentation.display(
+                    record: record,
+                    isDeleted: viewModel.isDeleted(record.messageIdHex),
+                    deletionSource: viewModel.deletionSource(for: record.messageIdHex),
                     myAccountId: viewModel.myAccountId
                 )
-                let isCommentary = !isDeleted && MessageSemantics.isAgentCommentary(tags: record.tags)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(viewModel.windowDisplayName(for: record.sender))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    if isDeleted {
+                    if display.isDeleted {
                         HStack(spacing: 6) {
                             Image(systemName: "trash")
-                            Text(MessageDeletionPresentation.bubbleText(
-                                source: viewModel.deletionSource(for: record.messageIdHex),
-                                isFromMe: isFromMe
-                            ))
+                            Text(display.text)
                         }
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     } else {
-                        Text(ContentSanitizer.messageBody(record.plaintext))
-                            .font(isCommentary ? .subheadline : .body)
-                            .foregroundStyle(isCommentary ? .secondary : .primary)
+                        Text(display.text)
+                            .font(display.isCommentary ? .subheadline : .body)
+                            .foregroundStyle(display.isCommentary ? .secondary : .primary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .padding(12)
                 .frame(maxWidth: 540, alignment: .leading)
                 .background(
-                    Color(.secondarySystemBackground).opacity(isCommentary ? 0.65 : 1),
+                    Color(.secondarySystemBackground).opacity(display.isCommentary ? 0.65 : 1),
                     in: .rect(cornerRadius: 14, style: .continuous)
                 )
                 .padding(.horizontal, 12)
             }
         }
+    }
+}
+
+/// Pure presentation decision for non-`agent_item` rows inside a subagent thread
+/// (kind-1111 replies and commentary): deleted rows never expose `record.plaintext`.
+nonisolated enum AgentSubagentReplyPresentation {
+    struct Display: Equatable {
+        let text: String
+        let isDeleted: Bool
+        let isCommentary: Bool
+    }
+
+    static func display(
+        record: AppMessageRecordFfi,
+        isDeleted: Bool,
+        deletionSource: DeletionSourceFfi,
+        myAccountId: String?
+    ) -> Display {
+        if isDeleted {
+            let isFromMe = MessageOwnership.isMine(
+                direction: record.direction,
+                sender: record.sender,
+                myAccountId: myAccountId
+            )
+            return Display(
+                text: MessageDeletionPresentation.bubbleText(
+                    source: deletionSource,
+                    isFromMe: isFromMe
+                ),
+                isDeleted: true,
+                isCommentary: false
+            )
+        }
+        return Display(
+            text: ContentSanitizer.messageBody(record.plaintext),
+            isDeleted: false,
+            isCommentary: MessageSemantics.isAgentCommentary(tags: record.tags)
+        )
     }
 }

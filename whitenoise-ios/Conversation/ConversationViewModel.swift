@@ -1366,16 +1366,8 @@ final class ConversationViewModel {
         readMarker.advanceWatermark(to: newest, isDeleted: false)
     }
 
-    func markSubagentThreadMessagesRead(_ items: [TimelineItem]) {
-        let records = items.compactMap { item -> AppMessageRecordFfi? in
-            guard case .message(let record, _) = item.kind else { return nil }
-            return record
-        }
-        guard !records.isEmpty else { return }
-        markVisibleMessagesRead(records)
-    }
-
-    /// Advances the watermark to the newest eligible row in the loaded window.
+    /// Advances the watermark to the newest eligible row in the loaded window,
+    /// including hidden subagent replies withheld from the main timeline.
     /// When the window reaches the conversation tail that marks the whole
     /// conversation read, with no dependency on a row visibility edge.
     func markConversationReadThroughTail() {
@@ -1388,19 +1380,18 @@ final class ConversationViewModel {
     }
 
     private func newestTailWatermarkCandidate() -> AppMessageRecordFfi? {
-        for item in timelineStore.timeline.reversed() {
-            guard case .message(let record, _) = item.kind else { continue }
-            let accepted = ConversationReadMarker.nextWatermark(
-                candidateKey: timelineStore.historyOrderKey(forMessageIdHex: record.messageIdHex),
-                pendingKey: nil,
-                flushedKey: nil,
-                kind: record.kind,
-                tags: record.tags,
-                isDeleted: isDeleted(record.messageIdHex)
-            )
-            if accepted != nil { return record }
+        var candidates: [AppMessageRecordFfi] = timelineStore.timeline.compactMap { item in
+            guard case .message(let record, _) = item.kind else { return nil }
+            return record
         }
-        return nil
+        candidates.append(contentsOf: timelineStore.hiddenSubagentWatermarkCandidates())
+        return ConversationReadMarker.newestWatermarkCandidate(
+            in: candidates,
+            isDeleted: { [weak self] messageIdHex in self?.isDeleted(messageIdHex) ?? true },
+            orderKey: { [weak timelineStore] messageIdHex in
+                timelineStore?.historyOrderKey(forMessageIdHex: messageIdHex)
+            }
+        )
     }
 
     func hasReports(_ messageID: String) -> Bool {
@@ -2520,19 +2511,36 @@ final class ConversationViewModel {
     }
 
     private func loadKind1202RequestSenders(for queriedIds: Set<String>) {
-        guard let appState, let accountRef = appState.activeAccountRef,
-              let client = appState.client else { return }
+        guard let appState, let accountRef = appState.activeAccountRef else { return }
         let groupIdHex = group.groupIdHex
+        let calls = agentRequestCalls
         agentRequestSenderLoadTask?.cancel()
         agentRequestSenderLoadTask = Task { @MainActor [weak self] in
-            guard let records = try? await client.groupMessages(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex,
-                limit: 200,
-                kinds: [MessageSemantics.kindAgentOperation]
-            ), !Task.isCancelled else { return }
-            self?.agentInteractions.recordRequestSenders(records)
-            self?.agentInteractions.markSettledIdsQueried(queriedIds)
+            var remaining = queriedIds
+            for limit: UInt32 in [200, 2_000, 10_000] {
+                guard let records = try? await calls.loadKind1202Messages(
+                    appState,
+                    accountRef,
+                    groupIdHex,
+                    limit
+                ), !Task.isCancelled else { return }
+                guard let self else { return }
+                self.agentInteractions.recordRequestSenders(records)
+                let resolved = remaining.filter { self.agentInteractions.requestSenderByEventId[$0] != nil }
+                if !resolved.isEmpty {
+                    self.agentInteractions.markSettledIdsQueried(resolved)
+                    remaining.subtract(resolved)
+                }
+                if remaining.isEmpty {
+                    return
+                }
+                // Fewer rows than requested means durable history is exhausted;
+                // mark the remaining IDs queried so we do not re-scan on every update.
+                if records.count < Int(limit) {
+                    self.agentInteractions.markSettledIdsQueried(remaining)
+                    return
+                }
+            }
         }
     }
 

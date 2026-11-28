@@ -721,6 +721,7 @@ struct AgentItemSupportTests {
         var capturedTokens: [String] = []
         var probedTokens: [String] = []
         var statusToReturn: LocalSendStatusFfi?
+        var shouldFailSend = true
 
         let calls = AgentRequestCalls(
             sendCustomEvent: { _, accountRef, groupIdHex, payload, token in
@@ -728,7 +729,7 @@ struct AgentItemSupportTests {
                 #expect(groupIdHex == hex("bb"))
                 #expect(payload.kind == MessageSemantics.kindAgentOperation)
                 capturedTokens.append(token)
-                if capturedTokens.count == 1 {
+                if shouldFailSend {
                     throw CancellationError()
                 }
                 return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: hex("99"))
@@ -748,26 +749,100 @@ struct AgentItemSupportTests {
 
         await viewModel.sendAgentNewSession(agentPubkeyHex: agent)
         let firstToken = try #require(capturedTokens.first)
-        #expect(capturedTokens.count == 1)
+        #expect(capturedTokens == [firstToken])
         #expect(probedTokens == [firstToken])
         #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.statusUnknown == true)
+        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.sendFailed == false)
         #expect(!viewModel.agentInteractions.isControlDisabled(key: key))
 
-        // Explicit recheck probes the original token and marks failed when MDK confirms rejection.
-        statusToReturn = .rejected
+        // A successful-but-empty status recheck (`nil`) MUST keep admission ambiguous
+        // rather than marking failed and letting a retry mint a second client token.
+        statusToReturn = nil
         await viewModel.recheckAgentRequestStatus(forKey: key)
         #expect(probedTokens == [firstToken, firstToken])
-        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.sendFailed == true)
+        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.statusUnknown == true)
+        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.sendFailed == false)
 
-        // Retrying through the production viewModel now mints a fresh send and succeeds.
+        // Retrying the identical payload while status is still `nil` reuses `firstToken`
+        // (which MDK deduplicates) rather than minting a duplicate token.
         await viewModel.sendAgentNewSession(agentPubkeyHex: agent)
-        #expect(capturedTokens.count == 2)
+        #expect(capturedTokens == [firstToken, firstToken])
+        #expect(probedTokens == [firstToken, firstToken, firstToken, firstToken])
+        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.statusUnknown == true)
+
+        // Explicit rejection clears ambiguity and marks failed.
+        statusToReturn = .rejected
+        await viewModel.recheckAgentRequestStatus(forKey: key)
+        #expect(probedTokens.count == 5)
+        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.sendFailed == true)
+        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.statusUnknown == false)
+
+        // Only after explicit rejection does a retry mint a fresh client token.
+        shouldFailSend = false
+        await viewModel.sendAgentNewSession(agentPubkeyHex: agent)
+        #expect(capturedTokens.count == 3)
+        #expect(capturedTokens[2] != firstToken)
         #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.requestEventIdHex == hex("99"))
     }
 
     @MainActor
+    @Test func ambiguousAgentRequestDoesNotSendDifferentChoiceWhenStatusRecheckIsEmpty() async throws {
+        let store = AgentInteractionStore()
+        let agent = hex("aa")
+        let me = hex("22")
+        let approvalId = hex("10")
+        let key = AgentInteractionStore.itemKey(targetEventIdHex: approvalId)
+        let allowPayload = AgentRequestBuilder.approvalChoice(
+            agentPubkeyHex: agent,
+            targetEventIdHex: approvalId,
+            choiceId: "c0",
+            choiceLabel: "Allow once"
+        )
+        let denyPayload = AgentRequestBuilder.approvalChoice(
+            agentPubkeyHex: agent,
+            targetEventIdHex: approvalId,
+            choiceId: "c1",
+            choiceLabel: "Deny"
+        )
+
+        var sentTokens: [String] = []
+        do {
+            _ = try await store.submit(
+                key: key,
+                summary: "Allow once",
+                senderAccountIdHex: me,
+                payload: allowPayload,
+                checkStatus: { _ in nil }
+            ) { _, token in
+                sentTokens.append(token)
+                throw CancellationError()
+            }
+            Issue.record("Expected CancellationError")
+        } catch is CancellationError {}
+
+        #expect(sentTokens.count == 1)
+        #expect(store.pendingRequest(forKey: key)?.statusUnknown == true)
+
+        // Switching to a different choice while the prior admission is still `nil`
+        // must neither reuse the old token for a different payload nor mint a second send.
+        let result = try await store.submit(
+            key: key,
+            summary: "Deny",
+            senderAccountIdHex: me,
+            payload: denyPayload,
+            checkStatus: { _ in nil }
+        ) { _, token in
+            sentTokens.append(token)
+            return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: hex("77"))
+        }
+        #expect(result == nil)
+        #expect(sentTokens.count == 1)
+        #expect(store.pendingRequest(forKey: key)?.statusUnknown == true)
+    }
+
+    @MainActor
     @Test(.marmotRuntimeConcurrencyLimit)
-    func subagentThreadReadMarksAdvanceWatermarkForHiddenKind1111Replies() async throws {
+    func tailReadMarkAdvancesPastHiddenSubagentKind1111RepliesWithoutJumpingPastUnreadMainRows() async throws {
         try await withTestClient { client in
             let appState = AppState.test(
                 client: client,
@@ -792,13 +867,16 @@ struct AgentItemSupportTests {
             )
 
             let agent = hex("aa")
-            let mainMsgId = hex("10")
+            let blockedAuthor = hex("cc")
+            let earlierMainId = hex("10")
             let taskId = hex("20")
+            let unreadMainId = hex("25")
             let childReplyId = hex("30")
+            let blockedReplyId = hex("40")
             let threadRef = TimelineThreadRefFfi(rootMessageIdHex: taskId, parentMessageIdHex: taskId)
 
-            let mainMsg = timelineRecord(
-                messageIdHex: mainMsgId,
+            let earlierMain = timelineRecord(
+                messageIdHex: earlierMainId,
                 groupIdHex: hex("bb"),
                 sender: agent,
                 plaintext: "Starting work",
@@ -820,6 +898,14 @@ struct AgentItemSupportTests {
                     fieldsJson: #"{"type":"task","body":{"kind":"subagent","description":"Explore repo"}}"#
                 )
             )
+            let unreadMain = timelineRecord(
+                messageIdHex: unreadMainId,
+                groupIdHex: hex("bb"),
+                sender: agent,
+                plaintext: "Unread main reply below the task card",
+                kind: MessageSemantics.kindChat,
+                timelineAt: 25
+            )
             let childReply = timelineRecord(
                 messageIdHex: childReplyId,
                 groupIdHex: hex("bb"),
@@ -836,34 +922,58 @@ struct AgentItemSupportTests {
                 timelineAt: 30,
                 thread: threadRef
             )
+            let blockedReply = timelineRecord(
+                messageIdHex: blockedReplyId,
+                groupIdHex: hex("bb"),
+                sender: blockedAuthor,
+                plaintext: "Blocked reply",
+                kind: MessageSemantics.kindComment,
+                tags: [
+                    MessageTagFfi(values: ["E", taskId, "", agent]),
+                    MessageTagFfi(values: ["K", "1201"]),
+                    MessageTagFfi(values: ["P", agent]),
+                    MessageTagFfi(values: ["e", taskId, "", agent]),
+                    MessageTagFfi(values: ["k", "1201"]),
+                ],
+                timelineAt: 40,
+                thread: threadRef
+            )
 
+            viewModel.applyBlockedAuthors([blockedAuthor])
             viewModel.applyTimelinePage(
-                TimelinePageFfi(messages: [mainMsg, taskRecord, childReply], hasMoreBefore: false, hasMoreAfter: false),
+                TimelinePageFfi(
+                    messages: [earlierMain, taskRecord, unreadMain, childReply, blockedReply],
+                    hasMoreBefore: false,
+                    hasMoreAfter: false
+                ),
                 placement: .window
             )
 
-            // Main timeline hides the subagent reply, so tail marking stops at mainMsgId.
+            // Before scrolling past unread main rows, inspecting the subagent thread
+            // does not advance the watermark past unseen main-chat messages.
+            viewModel.markVisibleMessagesRead([ConversationViewModel.appMessageRecord(from: earlierMain)])
+            let threadItems = viewModel.subagentThreadItems(forTaskMessageId: taskId)
+            #expect(threadItems.count == 1)
+            try await eventually { sleeper.sleepingCount == 1 }
+            sleeper.releaseAll()
+            try await eventually { markedIds == [earlierMainId] && sleeper.sleepingCount == 0 }
+
+            // Once the reader reaches the tail of the main chat, the watermark advances
+            // past the hidden subagent reply (while excluding blocked authors).
             viewModel.markConversationReadThroughTail()
             try await eventually { sleeper.sleepingCount == 1 }
             sleeper.releaseAll()
-            try await eventually { markedIds == [mainMsgId] && sleeper.sleepingCount == 0 }
-
-            // Viewing rows inside the subagent thread advances the read watermark to childReplyId.
-            let threadItems = viewModel.subagentThreadItems(forTaskMessageId: taskId)
-            #expect(threadItems.count == 1)
-            viewModel.markSubagentThreadMessagesRead(threadItems)
-            try await eventually { sleeper.sleepingCount == 1 }
-            sleeper.releaseAll()
-            try await eventually { markedIds == [mainMsgId, childReplyId] && sleeper.sleepingCount == 0 }
+            try await eventually { markedIds == [earlierMainId, childReplyId] && sleeper.sleepingCount == 0 }
         }
     }
 
     @MainActor
-    @Test func subagentThreadDeletedKind1111ReplyUsesDeletionPresentation() {
+    @Test func subagentThreadDeletedKind1111ReplyHidesPlaintextInRowPresentation() throws {
         let viewModel = ConversationViewModel(appState: AppState.test(), group: group(name: "Codex", id: hex("bb")))
         let agent = hex("aa")
         let taskId = hex("20")
         let childReplyId = hex("31")
+        let secretBody = "sensitive subagent output"
         let threadRef = TimelineThreadRefFfi(rootMessageIdHex: taskId, parentMessageIdHex: taskId)
 
         let taskRecord = timelineRecord(
@@ -885,7 +995,7 @@ struct AgentItemSupportTests {
             messageIdHex: childReplyId,
             groupIdHex: hex("bb"),
             sender: agent,
-            plaintext: "sensitive output",
+            plaintext: secretBody,
             kind: MessageSemantics.kindComment,
             tags: [
                 MessageTagFfi(values: ["E", taskId, "", agent]),
@@ -893,16 +1003,33 @@ struct AgentItemSupportTests {
                 MessageTagFfi(values: ["P", agent]),
                 MessageTagFfi(values: ["e", taskId, "", agent]),
                 MessageTagFfi(values: ["k", "1201"]),
+                MessageTagFfi(values: ["phase", "commentary"]),
             ],
             timelineAt: 20,
             thread: threadRef
         )
 
+        func resolvedDisplay() throws -> AgentSubagentReplyPresentation.Display {
+            let item = try #require(viewModel.subagentThreadItems(forTaskMessageId: taskId).first)
+            guard case .message(let record, _) = item.kind else {
+                throw NSError(domain: "AgentItemSupportTests", code: 1)
+            }
+            return AgentSubagentReplyPresentation.display(
+                record: record,
+                isDeleted: viewModel.isDeleted(record.messageIdHex),
+                deletionSource: viewModel.deletionSource(for: record.messageIdHex),
+                myAccountId: viewModel.myAccountId
+            )
+        }
+
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [taskRecord, activeReply], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
         )
-        #expect(!viewModel.isDeleted(childReplyId))
+        let activeDisplay = try resolvedDisplay()
+        #expect(!activeDisplay.isDeleted)
+        #expect(activeDisplay.isCommentary)
+        #expect(activeDisplay.text == secretBody)
 
         var authorDeletedReply = activeReply
         authorDeletedReply.deleted = true
@@ -911,20 +1038,11 @@ struct AgentItemSupportTests {
             TimelinePageFfi(messages: [taskRecord, authorDeletedReply], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
         )
-        #expect(viewModel.isDeleted(childReplyId))
-        #expect(viewModel.deletionSource(for: childReplyId) == .author)
-        #expect(
-            MessageDeletionPresentation.bubbleText(
-                source: viewModel.deletionSource(for: childReplyId),
-                isFromMe: false
-            ) == L10n.string("This message was deleted.")
-        )
-        #expect(
-            MessageDeletionPresentation.bubbleText(
-                source: viewModel.deletionSource(for: childReplyId),
-                isFromMe: true
-            ) == L10n.string("You deleted this message.")
-        )
+        let authorDeletedDisplay = try resolvedDisplay()
+        #expect(authorDeletedDisplay.isDeleted)
+        #expect(!authorDeletedDisplay.isCommentary)
+        #expect(!authorDeletedDisplay.text.isEmpty)
+        #expect(!authorDeletedDisplay.text.contains(secretBody))
 
         var adminDeletedReply = activeReply
         adminDeletedReply.deleted = true
@@ -933,14 +1051,89 @@ struct AgentItemSupportTests {
             TimelinePageFfi(messages: [taskRecord, adminDeletedReply], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
         )
-        #expect(viewModel.isDeleted(childReplyId))
-        #expect(viewModel.deletionSource(for: childReplyId) == .admin)
-        #expect(
-            MessageDeletionPresentation.bubbleText(
-                source: viewModel.deletionSource(for: childReplyId),
-                isFromMe: false
-            ) == L10n.string("This message was deleted by an admin.")
+        let adminDeletedDisplay = try resolvedDisplay()
+        #expect(adminDeletedDisplay.isDeleted)
+        #expect(!adminDeletedDisplay.text.isEmpty)
+        #expect(!adminDeletedDisplay.text.contains(secretBody))
+        #expect(adminDeletedDisplay.text != authorDeletedDisplay.text)
+    }
+
+    @MainActor
+    @Test func kind1202SenderAttributionExpandsPastInitial200BatchForOlderApprovals() async throws {
+        let appState = AppState.test()
+        let responder = hex("44")
+        let agent = hex("aa")
+        let olderRequestId = hex("95")
+        let approvalId = hex("15")
+        appState.accountStore.accounts = [
+            AccountSummaryFfi(label: "acct-1", accountIdHex: hex("22"), localSigning: true, signedOut: false, running: true)
+        ]
+        appState.activeAccountRef = "acct-1"
+
+        let newerBatch: [AppMessageRecordFfi] = (0..<200).map { index in
+            message(
+                id: String(format: "%064x", index + 1),
+                kind: MessageSemantics.kindAgentOperation,
+                groupIdHex: hex("bb"),
+                sender: hex("33"),
+                plaintext: "Allow",
+                recordedAt: UInt64(300 + index)
+            )
+        }
+        let olderRecord = message(
+            id: olderRequestId,
+            kind: MessageSemantics.kindAgentOperation,
+            groupIdHex: hex("bb"),
+            sender: responder,
+            plaintext: "Allow once",
+            recordedAt: 50
         )
+        var requestedLimits: [UInt32?] = []
+        let viewModel = ConversationViewModel(
+            appState: appState,
+            group: group(name: "Agent Chat", id: hex("bb")),
+            agentRequestCalls: AgentRequestCalls(
+                sendCustomEvent: { _, _, _, _, token in
+                    LocalSendAcceptanceFfi(clientToken: token, messageIdHex: hex("99"))
+                },
+                localSendStatus: { _, _, _, _ in nil },
+                loadKind1202Messages: { _, _, _, limit in
+                    requestedLimits.append(limit)
+                    if let limit, limit <= 200 {
+                        return newerBatch
+                    }
+                    return newerBatch + [olderRecord]
+                }
+            )
+        )
+
+        let settledApproval = timelineRecord(
+            messageIdHex: approvalId,
+            groupIdHex: hex("bb"),
+            sender: agent,
+            plaintext: "Answered: Allow once",
+            kind: MessageSemantics.kindAgentActivity,
+            timelineAt: 60,
+            agentItem: makeAgentItem(
+                version: 2,
+                itemId: "approval:old",
+                itemType: "approval",
+                state: .done,
+                title: "Allow this command?",
+                fieldsJson: #"{"type":"approval","body":{"choices":[{"id":"c0","label":"Allow once","effect":"allow"}],"answer":{"choice":"c0"}}}"#,
+                settles: [olderRequestId]
+            )
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [settledApproval], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+
+        let projection = try #require(viewModel.agentItemProjection(forMessageId: approvalId))
+        try await eventually {
+            viewModel.agentInteractions.settledByAccountId(for: projection) == responder
+        }
+        #expect(requestedLimits == [200, 2_000])
     }
 
     @MainActor
