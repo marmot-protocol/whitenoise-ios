@@ -708,7 +708,7 @@ struct AgentItemSupportTests {
     }
 
     @MainActor
-    @Test func viewModelRechecksAmbiguousAgentRequestUsingOriginalTokenAndRecoversOnRejection() async throws {
+    @Test func approvalCardRetryRecoversAmbiguousSendUsingOriginalTokenAndFreshTokenAfterRejection() async throws {
         let appState = AppState.test()
         let me = hex("22")
         appState.accountStore.accounts = [
@@ -717,7 +717,25 @@ struct AgentItemSupportTests {
         appState.activeAccountRef = "acct-1"
 
         let agent = hex("aa")
-        let key = AgentInteractionStore.newSessionKey(agentPubkeyHex: agent)
+        let approvalId = hex("12")
+        let key = AgentInteractionStore.itemKey(targetEventIdHex: approvalId)
+        let choice = AgentItemBody.ApprovalChoice(id: "c0", label: "Allow once", effect: "allow")
+        let approvalProjection = AgentItemProjection.parse(
+            messageIdHex: approvalId,
+            sender: agent,
+            item: makeAgentItem(
+                itemId: "approval:1",
+                itemType: "approval",
+                state: .waiting,
+                title: "Allow this command?",
+                fieldsJson: #"{"type":"approval","body":{"choices":[{"id":"c0","label":"Allow once","effect":"allow"}]}}"#
+            ),
+            firstEventMissing: false,
+            thread: nil,
+            plaintext: "git status",
+            tags: []
+        )
+
         var capturedTokens: [String] = []
         var probedTokens: [String] = []
         var statusToReturn: LocalSendStatusFfi?
@@ -747,42 +765,214 @@ struct AgentItemSupportTests {
             agentRequestCalls: calls
         )
 
-        await viewModel.sendAgentNewSession(agentPubkeyHex: agent)
+        // Initial approval tap fails ambiguously with nil status -> card shows Pending / Retry.
+        await viewModel.sendAgentApprovalChoice(choice, for: approvalProjection)
         let firstToken = try #require(capturedTokens.first)
         #expect(capturedTokens == [firstToken])
         #expect(probedTokens == [firstToken])
         #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.statusUnknown == true)
         #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.sendFailed == false)
-        #expect(!viewModel.agentInteractions.isControlDisabled(key: key))
 
-        // A successful-but-empty status recheck (`nil`) MUST keep admission ambiguous
-        // rather than marking failed and letting a retry mint a second client token.
+        // Pending-row Retry when status is still `nil` reuses `firstToken` (no duplicate token).
         statusToReturn = nil
         await viewModel.recheckAgentRequestStatus(forKey: key)
-        #expect(probedTokens == [firstToken, firstToken])
-        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.statusUnknown == true)
-        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.sendFailed == false)
-
-        // Retrying the identical payload while status is still `nil` reuses `firstToken`
-        // (which MDK deduplicates) rather than minting a duplicate token.
-        await viewModel.sendAgentNewSession(agentPubkeyHex: agent)
         #expect(capturedTokens == [firstToken, firstToken])
-        #expect(probedTokens == [firstToken, firstToken, firstToken, firstToken])
+        #expect(probedTokens == [firstToken, firstToken, firstToken])
         #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.statusUnknown == true)
 
-        // Explicit rejection clears ambiguity and marks failed.
-        statusToReturn = .rejected
-        await viewModel.recheckAgentRequestStatus(forKey: key)
-        #expect(probedTokens.count == 5)
-        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.sendFailed == true)
-        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.statusUnknown == false)
-
-        // Only after explicit rejection does a retry mint a fresh client token.
+        // When Retry succeeds on the same `nil` path, it admits under `firstToken` and clears statusUnknown.
         shouldFailSend = false
-        await viewModel.sendAgentNewSession(agentPubkeyHex: agent)
-        #expect(capturedTokens.count == 3)
-        #expect(capturedTokens[2] != firstToken)
+        await viewModel.recheckAgentRequestStatus(forKey: key)
+        #expect(capturedTokens == [firstToken, firstToken, firstToken])
+        #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.statusUnknown == false)
         #expect(viewModel.agentInteractions.pendingRequest(forKey: key)?.requestEventIdHex == hex("99"))
+        #expect(viewModel.agentInteractions.isControlDisabled(key: key))
+
+        // On a second approval where MDK explicitly reports `.rejected`, Retry mints a fresh token.
+        let secondApprovalId = hex("13")
+        let secondKey = AgentInteractionStore.itemKey(targetEventIdHex: secondApprovalId)
+        let secondProjection = AgentItemProjection.parse(
+            messageIdHex: secondApprovalId,
+            sender: agent,
+            item: makeAgentItem(
+                itemId: "approval:2",
+                itemType: "approval",
+                state: .waiting,
+                title: "Allow build?",
+                fieldsJson: #"{"type":"approval","body":{"choices":[{"id":"c0","label":"Allow once","effect":"allow"}]}}"#
+            ),
+            firstEventMissing: false,
+            thread: nil,
+            plaintext: "swift build",
+            tags: []
+        )
+        capturedTokens.removeAll()
+        probedTokens.removeAll()
+        statusToReturn = nil
+        shouldFailSend = true
+
+        await viewModel.sendAgentApprovalChoice(choice, for: secondProjection)
+        let rejectedToken = try #require(capturedTokens.first)
+        #expect(viewModel.agentInteractions.pendingRequest(forKey: secondKey)?.statusUnknown == true)
+
+        statusToReturn = .rejected
+        shouldFailSend = false
+        await viewModel.recheckAgentRequestStatus(forKey: secondKey)
+        #expect(probedTokens == [rejectedToken, rejectedToken])
+        #expect(capturedTokens.count == 2)
+        #expect(capturedTokens[1] != rejectedToken)
+        #expect(viewModel.agentInteractions.pendingRequest(forKey: secondKey)?.requestEventIdHex == hex("99"))
+    }
+
+    @MainActor
+    @Test func deletingStructuredAgentItemsMasksProjectionsAndExcludesWaitingSummaries() throws {
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: group(name: "Agent Chat", id: hex("bb")))
+        let agent = hex("aa")
+        let sessionId = hex("41")
+        let turnId = hex("42")
+        let mainApprovalId = hex("43")
+        let taskId = hex("44")
+        let childApprovalId = hex("45")
+        let secretCmd = "cat /etc/secret-token"
+        let threadRef = TimelineThreadRefFfi(rootMessageIdHex: taskId, parentMessageIdHex: taskId)
+
+        let sessionRecord = timelineRecord(
+            messageIdHex: sessionId,
+            groupIdHex: hex("bb"),
+            sender: agent,
+            plaintext: "",
+            kind: MessageSemantics.kindAgentActivity,
+            timelineAt: 1,
+            agentItem: makeAgentItem(itemId: "s1", itemType: "session", state: .running, title: "Session", fieldsJson: #"{"type":"session","body":{}}"#)
+        )
+        let turnRecord = timelineRecord(
+            messageIdHex: turnId,
+            groupIdHex: hex("bb"),
+            sender: agent,
+            plaintext: "",
+            kind: MessageSemantics.kindAgentActivity,
+            timelineAt: 2,
+            agentItem: makeAgentItem(itemId: "t1", itemType: "turn", state: .running, title: "Working", fieldsJson: #"{"type":"turn","body":{"started_by":"user"}}"#)
+        )
+        let mainApprovalRecord = timelineRecord(
+            messageIdHex: mainApprovalId,
+            groupIdHex: hex("bb"),
+            sender: agent,
+            plaintext: secretCmd,
+            kind: MessageSemantics.kindAgentActivity,
+            timelineAt: 3,
+            agentItem: makeAgentItem(
+                itemId: "a-main",
+                itemType: "approval",
+                state: .waiting,
+                title: "Allow?",
+                fieldsJson: #"{"type":"approval","body":{"choices":[{"id":"c0","label":"Allow","effect":"allow"}]}}"#
+            )
+        )
+        let taskRecord = timelineRecord(
+            messageIdHex: taskId,
+            groupIdHex: hex("bb"),
+            sender: agent,
+            plaintext: "Investigate",
+            kind: MessageSemantics.kindAgentActivity,
+            timelineAt: 4,
+            agentItem: makeAgentItem(
+                itemId: "task:sub1",
+                itemType: "task",
+                state: .running,
+                title: "Subagent",
+                fieldsJson: #"{"type":"task","body":{"kind":"subagent","description":"Investigate"}}"#
+            )
+        )
+        let childApprovalRecord = timelineRecord(
+            messageIdHex: childApprovalId,
+            groupIdHex: hex("bb"),
+            sender: agent,
+            plaintext: secretCmd,
+            kind: MessageSemantics.kindAgentActivity,
+            tags: [MessageTagFfi(values: ["subagent", "task:sub1"])],
+            timelineAt: 5,
+            thread: threadRef,
+            agentItem: makeAgentItem(
+                itemId: "a-sub",
+                itemType: "approval",
+                state: .waiting,
+                title: "Allow subagent command?",
+                fieldsJson: #"{"type":"approval","body":{"choices":[{"id":"c0","label":"Allow","effect":"allow"}]}}"#,
+                alerts: true
+            )
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(
+                messages: [sessionRecord, turnRecord, mainApprovalRecord, taskRecord, childApprovalRecord],
+                hasMoreBefore: false,
+                hasMoreAfter: false
+            ),
+            placement: .window
+        )
+        #expect(viewModel.agentItemProjection(forMessageId: mainApprovalId) != nil)
+        #expect(viewModel.agentItemProjection(forMessageId: childApprovalId) != nil)
+        #expect(viewModel.activeRunningAgentTurns.map(\.messageIdHex) == [turnId])
+        #expect(viewModel.latestAgentSessions.map(\.messageIdHex) == [sessionId])
+        #expect(viewModel.waitingAgentSubagents.map(\.waiting.messageIdHex) == [childApprovalId])
+
+        // Optimistic delete immediately masks the structured card and removes it from waiting summaries.
+        viewModel.timelineStore.applyOptimisticDelete(childApprovalId)
+        #expect(viewModel.isDeleted(childApprovalId))
+        #expect(viewModel.agentItemProjection(forMessageId: childApprovalId) == nil)
+        #expect(viewModel.waitingAgentSubagents.isEmpty)
+        #expect(viewModel.subagentThreadSummary(forTaskMessageId: taskId)?.waitingInteractions.isEmpty == true)
+
+        // Rolling back optimistic delete restores projection and waiting summary.
+        viewModel.timelineStore.rollbackOptimisticDelete(childApprovalId)
+        #expect(!viewModel.isDeleted(childApprovalId))
+        #expect(viewModel.agentItemProjection(forMessageId: childApprovalId) != nil)
+        #expect(viewModel.waitingAgentSubagents.map(\.waiting.messageIdHex) == [childApprovalId])
+
+        // Projected deletion masks main-chat and subagent structured items and drops them from summaries.
+        var deletedSession = sessionRecord
+        deletedSession.deleted = true
+        deletedSession.deletionSource = .admin
+        var deletedTurn = turnRecord
+        deletedTurn.deleted = true
+        deletedTurn.deletionSource = .admin
+        var deletedMainApproval = mainApprovalRecord
+        deletedMainApproval.deleted = true
+        deletedMainApproval.deletionSource = .admin
+        var deletedChildApproval = childApprovalRecord
+        deletedChildApproval.deleted = true
+        deletedChildApproval.deletionSource = .admin
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(
+                messages: [deletedSession, deletedTurn, deletedMainApproval, taskRecord, deletedChildApproval],
+                hasMoreBefore: false,
+                hasMoreAfter: false
+            ),
+            placement: .window
+        )
+        #expect(viewModel.isDeleted(mainApprovalId))
+        #expect(viewModel.agentItemProjection(forMessageId: mainApprovalId) == nil)
+        #expect(viewModel.agentItemProjection(forMessageId: childApprovalId) == nil)
+        #expect(viewModel.activeRunningAgentTurns.isEmpty)
+        #expect(viewModel.latestAgentSessions.isEmpty)
+        #expect(viewModel.waitingAgentSubagents.isEmpty)
+
+        // Inside the subagent thread, the deleted structured item falls through to deletion presentation.
+        let childItem = try #require(viewModel.subagentThreadItems(forTaskMessageId: taskId).first)
+        guard case .message(let childRecord, _) = childItem.kind else {
+            Issue.record("Expected message item")
+            return
+        }
+        let display = AgentSubagentReplyPresentation.display(
+            record: childRecord,
+            isDeleted: viewModel.isDeleted(childRecord.messageIdHex),
+            deletionSource: viewModel.deletionSource(for: childRecord.messageIdHex),
+            myAccountId: viewModel.myAccountId
+        )
+        #expect(display.isDeleted)
+        #expect(!display.text.contains(secretCmd))
     }
 
     @MainActor

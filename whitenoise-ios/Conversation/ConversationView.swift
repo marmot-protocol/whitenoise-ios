@@ -2706,6 +2706,15 @@ struct ConversationView: View {
         case .message(let record, let status):
             if let groupSystemText = viewModel.groupSystemDisplayText(for: record) {
                 GroupSystemEventRow(text: groupSystemText)
+            } else if viewModel.isDeleted(record.messageIdHex) {
+                messageBubble(
+                    for: item,
+                    record: record,
+                    status: status,
+                    viewModel: viewModel,
+                    showsSenderIdentity: showsSenderIdentity,
+                    usesSelectionLayout: isSelectingMessages
+                )
             } else if let agentProjection = viewModel.agentItemProjection(forMessageId: record.messageIdHex) {
                 AgentItemRow(
                     projection: agentProjection,

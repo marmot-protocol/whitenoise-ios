@@ -273,32 +273,6 @@ final class AgentInteractionStore {
         }
     }
 
-    /// Explicit follow-up status check for a request whose admission was left unknown.
-    /// Returns a `LocalSendAcceptanceFfi` if MDK confirms admission; marks `sendFailed = true`
-    /// only when MDK explicitly reports rejection. A missing status (`nil`) stays ambiguous so
-    /// a still-pending admission can never be duplicated with a second token.
-    @discardableResult
-    func recheckStatus(
-        forKey key: String,
-        checkStatus: LocalSendStatusOperation
-    ) async -> LocalSendAcceptanceFfi? {
-        guard let existing = pendingByKey[key], !existing.sendFailed, existing.statusUnknown else {
-            return nil
-        }
-        do {
-            let status = try await checkStatus(existing.clientToken)
-            return applySendStatus(
-                key: existing.key,
-                token: existing.clientToken,
-                senderAccountIdHex: existing.senderAccountIdHex,
-                status: status,
-                ambiguousWhenMissing: true
-            )
-        } catch {
-            return nil
-        }
-    }
-
     private func recordAccepted(
         key: String,
         token: String,
@@ -359,12 +333,5 @@ final class AgentInteractionStore {
         if pendingByKey[key]?.sendFailed == true {
             pendingByKey.removeValue(forKey: key)
         }
-    }
-
-    func reset() {
-        pendingByKey.removeAll()
-        requestSenderByEventId.removeAll()
-        settledEventIds.removeAll()
-        queriedKind1202ForSettledIds.removeAll()
     }
 }

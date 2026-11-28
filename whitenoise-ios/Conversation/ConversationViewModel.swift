@@ -2541,6 +2541,9 @@ final class ConversationViewModel {
                     return
                 }
             }
+            if !remaining.isEmpty {
+                self?.agentInteractions.markSettledIdsQueried(remaining)
+            }
         }
     }
 
@@ -2644,13 +2647,14 @@ final class ConversationViewModel {
     }
 
     func recheckAgentRequestStatus(forKey key: String) async {
-        guard let appState,
-              let accountRef = appState.activeAccountRef else { return }
-        let groupIdHex = group.groupIdHex
-        let calls = agentRequestCalls
-        _ = await agentInteractions.recheckStatus(forKey: key) { token in
-            try await calls.localSendStatus(appState, accountRef, groupIdHex, token)
-        }
+        guard let pending = agentInteractions.pendingRequest(forKey: key),
+              pending.statusUnknown,
+              !pending.sendFailed else { return }
+        await sendAgentRequest(
+            key: pending.key,
+            summary: pending.summary,
+            payload: pending.payload
+        )
     }
 
     private func sendAgentRequest(
@@ -3834,10 +3838,7 @@ final class ConversationViewModel {
               deleteCapability(for: canonical).canDeleteForEveryone,
               let appState, let accountRef = appState.activeAccountRef
         else { return false }
-        timelineStore.deletedProjections.insertOptimistic(canonical.messageIdHex)
-        if timelineStore.deletedProjections.rebuild() {
-            timelineStore.noteProjectionChanged()
-        }
+        timelineStore.applyOptimisticDelete(canonical.messageIdHex)
         do {
             let client = try appState.currentMarmotClient()
             _ = try await deleteMessageOperation(
@@ -3850,10 +3851,7 @@ final class ConversationViewModel {
             Haptics.warning()
             return true
         } catch {
-            timelineStore.deletedProjections.removeOptimistic(canonical.messageIdHex)
-            if timelineStore.deletedProjections.rebuild() {
-                timelineStore.noteProjectionChanged()
-            }
+            timelineStore.rollbackOptimisticDelete(canonical.messageIdHex)
             Haptics.error()
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't delete message"), error: error))
             return false

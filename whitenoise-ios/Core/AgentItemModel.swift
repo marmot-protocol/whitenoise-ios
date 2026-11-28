@@ -941,7 +941,8 @@ nonisolated struct AgentSubagentThreadIndex: Equatable, Sendable {
         agentItemsByMessageId: [String: AgentItemProjection],
         threadRefByMessageId: [String: TimelineThreadRefFfi],
         senderByMessageId: [String: String],
-        blockedSenders: Set<String> = []
+        blockedSenders: Set<String> = [],
+        deletedMessageIds: Set<String> = []
     ) -> AgentSubagentThreadIndex {
         func isBlocked(_ sender: String) -> Bool {
             !blockedSenders.isEmpty && blockedSenders.contains(sender.lowercased())
@@ -1024,7 +1025,10 @@ nonisolated struct AgentSubagentThreadIndex: Equatable, Sendable {
             directChildren[ownerTask, default: []].append(messageId)
 
             let waitingProjection: AgentItemProjection? = {
-                guard let proj = agentItemsByMessageId[messageId], proj.isWaitingInteraction else { return nil }
+                guard !deletedMessageIds.contains(messageId),
+                      let proj = agentItemsByMessageId[messageId],
+                      proj.isWaitingInteraction
+                else { return nil }
                 return proj
             }()
 

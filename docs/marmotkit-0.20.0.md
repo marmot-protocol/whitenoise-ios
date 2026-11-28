@@ -1,7 +1,7 @@
 # MarmotKit 0.20.0 integration and storage migration
 
-First pinned on `develop` from `marmotkit-v0.20.0-rc.3`
-(`7847b7f7ae761d41dc07784cd0308c29127b7ff9`) via `scripts/sync-rc.sh`, classified
+First pinned on `develop` from `marmotkit-v0.20.0-rc.4`
+(`07567caf0814fa0f5688c5da83a7209f94c71e03`) via `scripts/sync-rc.sh`, classified
 `minor` against `v0.19.0` (`3fce95465cdea1edc8456dbd1c6691d1c8dc1f2e`).
 
 ## Storage migrations (one-way, schema 218 → 228)

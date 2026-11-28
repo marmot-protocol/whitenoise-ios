@@ -862,9 +862,10 @@ final class TimelineStore {
     func agentEventDisplay(for item: TimelineItem) -> AgentEventPresentation.Display? {
         _ = timelineProjectionGeneration
         // Structured agent items (MarmotKit 0.20+ `agentItem`) render via `AgentItemRow`,
-        // not the legacy JSON `AgentEventRow`.
+        // not the legacy JSON `AgentEventRow`; deleted items render as tombstones.
         if case .message(let record, _) = item.kind,
-           agentItemProjectionByMessageId[record.messageIdHex] != nil {
+           deletedProjections.contains(record.messageIdHex)
+            || agentItemProjectionByMessageId[record.messageIdHex] != nil {
             return nil
         }
         guard var display = agentEventProjections.display(for: item) else { return nil }
@@ -883,23 +884,26 @@ final class TimelineStore {
 
     func agentItemProjection(forMessageId messageIdHex: String) -> AgentItemProjection? {
         _ = timelineProjectionGeneration
+        guard !deletedProjections.contains(messageIdHex) else { return nil }
         return agentItemProjectionByMessageId[messageIdHex]
     }
 
     func allAgentItemProjections() -> [AgentItemProjection] {
         _ = timelineProjectionGeneration
-        return Array(agentItemProjectionByMessageId.values)
+        return agentItemProjectionByMessageId.values.filter { !deletedProjections.contains($0.messageIdHex) }
     }
 
     func subagentThreadSummary(forTaskMessageId taskMessageIdHex: String) -> AgentSubagentThreadSummary? {
         _ = timelineProjectionGeneration
+        guard !deletedProjections.contains(taskMessageIdHex) else { return nil }
         return subagentThreadIndex.summariesByTaskMessageId[taskMessageIdHex]
     }
 
     /// Ordered timeline rows belonging to one subagent's thread view.
     func subagentThreadItems(forTaskMessageId taskMessageIdHex: String) -> [TimelineItem] {
         _ = timelineProjectionGeneration
-        guard let summary = subagentThreadIndex.summariesByTaskMessageId[taskMessageIdHex] else { return [] }
+        guard !deletedProjections.contains(taskMessageIdHex),
+              let summary = subagentThreadIndex.summariesByTaskMessageId[taskMessageIdHex] else { return [] }
         return summary.directChildMessageIds.compactMap { messageId in
             guard let record = messageById[messageId], !isBlockedAuthor(record.sender) else { return nil }
             if let normalized = Hex.normalized32Bytes(record.messageIdHex), hiddenMessageIds.contains(normalized) {
@@ -933,7 +937,8 @@ final class TimelineStore {
         var latestByAgent: [String: AgentItemProjection] = [:]
         var agentOrder: [String] = []
         for id in order {
-            guard let projection = agentItemProjectionByMessageId[id],
+            guard !deletedProjections.contains(id),
+                  let projection = agentItemProjectionByMessageId[id],
                   case .turn = projection.body,
                   !isBlockedAuthor(projection.sender),
                   !subagentThreadIndex.hiddenFromMainTimeline.contains(id)
@@ -957,12 +962,15 @@ final class TimelineStore {
         let order = preparedOrder ?? Array(messageById.keys)
         var results: [(task: AgentItemProjection, waiting: AgentItemProjection)] = []
         for id in order {
-            guard let task = agentItemProjectionByMessageId[id],
+            guard !deletedProjections.contains(id),
+                  let task = agentItemProjectionByMessageId[id],
                   task.isSubagentTask,
                   !isBlockedAuthor(task.sender),
                   !subagentThreadIndex.hiddenFromMainTimeline.contains(id),
                   let summary = subagentThreadIndex.summariesByTaskMessageId[id],
-                  let waiting = summary.waitingInteractions.last(where: { !isBlockedAuthor($0.sender) })
+                  let waiting = summary.waitingInteractions.last(where: {
+                      !isBlockedAuthor($0.sender) && !deletedProjections.contains($0.messageIdHex)
+                  })
             else { continue }
             results.append((task: task, waiting: waiting))
         }
@@ -976,7 +984,8 @@ final class TimelineStore {
         var latestByAgent: [String: AgentItemProjection] = [:]
         var agentOrder: [String] = []
         for id in order {
-            guard let projection = agentItemProjectionByMessageId[id],
+            guard !deletedProjections.contains(id),
+                  let projection = agentItemProjectionByMessageId[id],
                   case .session = projection.body,
                   !isBlockedAuthor(projection.sender)
             else { continue }
@@ -1427,7 +1436,8 @@ final class TimelineStore {
                 agentItemsByMessageId: agentItemProjectionByMessageId,
                 threadRefByMessageId: threadRefByMessageId,
                 senderByMessageId: senderById,
-                blockedSenders: blockedAuthorIds
+                blockedSenders: blockedAuthorIds,
+                deletedMessageIds: deletedProjections.deletedMessageIds
             )
         }
         var nextSettled: Set<String> = []
@@ -2260,6 +2270,24 @@ final class TimelineStore {
         }
     }
 
+    // MARK: - Optimistic deletes
+
+    func applyOptimisticDelete(_ messageIdHex: String) {
+        deletedProjections.insertOptimistic(messageIdHex)
+        if deletedProjections.rebuild() {
+            _ = rebuildAgentProjections()
+            noteProjectionChanged()
+        }
+    }
+
+    func rollbackOptimisticDelete(_ messageIdHex: String) {
+        deletedProjections.removeOptimistic(messageIdHex)
+        if deletedProjections.rebuild() {
+            _ = rebuildAgentProjections()
+            noteProjectionChanged()
+        }
+    }
+
     // MARK: - Optimistic reset
 
     func resetOptimisticState() {
@@ -2287,9 +2315,10 @@ final class TimelineStore {
         publishedOutgoingMessageIdsAwaitingProjection.removeAll()
         mediaProjections.removeAllPending()
         let deletedChanged = deletedProjections.rebuild()
+        let agentChanged = rebuildAgentProjections()
         let reactionsChanged = recomputeReactions()
         let timelineChanged = backingChanged ? rebuildTimeline() : false
-        let changed = backingChanged || deletedChanged || reactionsChanged || timelineChanged
+        let changed = backingChanged || deletedChanged || agentChanged || reactionsChanged || timelineChanged
         if changed {
             noteProjectionChanged()
         }
