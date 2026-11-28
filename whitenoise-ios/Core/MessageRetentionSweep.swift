@@ -128,7 +128,7 @@ final class MessageRetentionSweeper {
     /// Waits out the interval between sweep passes; throws when cancelled.
     typealias Sleep = @MainActor (_ nanoseconds: UInt64) async throws -> Void
     /// The production interval wait.
-    static let taskSleep: Sleep = { try await Task.sleep(nanoseconds: $0) }
+    nonisolated static let taskSleep: Sleep = { try await Task.sleep(nanoseconds: $0) }
 
     private var sweepTask: Task<Void, Never>?
     private var groupSubscriptionsByAccountRef: [String: MessageRetentionGroupSubscription] = [:]

@@ -411,7 +411,7 @@ final class AppState {
     }
     @ObservationIgnored private let moderationReportingAvailability: @MainActor (MarmotClient?) -> Bool
 
-    static func moderationReportingAvailable(on client: MarmotClient?) -> Bool {
+    nonisolated static func moderationReportingAvailable(on client: MarmotClient?) -> Bool {
         client?.moderationReportingAvailable == true
     }
 
@@ -1384,11 +1384,11 @@ final class AppState {
 
     @MainActor
     func synchronizeAutomaticAttachmentPolicyIfAllowed(
-        bridge: AttachmentPolicyBridge = .shared
+        bridge: AttachmentPolicyBridge? = nil
     ) async throws {
         guard allowsAutomaticAttachmentPolicySync,
               let client = try? currentMarmotClient() else { return }
-        try await bridge.synchronize(client)
+        try await (bridge ?? .shared).synchronize(client)
     }
 
     func eraseAppData() async throws {

@@ -48,7 +48,7 @@ final class ConversationReadMarker {
 
     typealias MarkReadHandler = @MainActor (AppState, String, String, [String]) async throws -> [TimelineReadMarkResult]
 
-    static let defaultMarkRead: MarkReadHandler = { appState, accountRef, groupIdHex, messageIdHexes in
+    nonisolated static let defaultMarkRead: MarkReadHandler = { appState, accountRef, groupIdHex, messageIdHexes in
         let client = try appState.currentMarmotClient()
         return await client.markTimelineMessagesRead(
             accountRef: accountRef,
