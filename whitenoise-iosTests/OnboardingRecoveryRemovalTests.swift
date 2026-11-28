@@ -11,7 +11,7 @@ struct OnboardingRecoveryRemovalTests {
         let (state, client) = try await makeState()
         try await closing(client) {
             let removed = try await makeBrokenAccount(client)
-            let retained = try await makeBrokenAccount(client, nsec: "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn")
+            let retained = try await makeBrokenAccount(client)
             try await state.refreshAccounts(refreshUnreadSummaries: false)
             #expect(state.onboardingRecoveryAccounts.count == 2)
 
@@ -159,7 +159,7 @@ struct OnboardingRecoveryRemovalTests {
 
     private func makeBrokenAccount(
         _ client: MarmotClient,
-        nsec: String = "nsec1j4c6269y9w0q2er2xjw8sv2ehyrtfxq3jwgdlxj6qfn8z4gjsq5qfvfk99"
+        nsec: String = TestKeys.randomNsec()
     ) async throws -> AccountSummaryFfi {
         let snapshot = try await client.marmot.beginOnboarding(
             nsec: nsec,
