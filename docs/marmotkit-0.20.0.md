@@ -1,13 +1,14 @@
 # MarmotKit 0.20.0 integration and storage migration
 
-First pinned on `develop` from `marmotkit-v0.20.0-rc.2`
-(`a3228a2c572f2c91bbc5948160bbe890f20888a2`) via `scripts/sync-rc.sh`, classified
+First pinned on `develop` from `marmotkit-v0.20.0-rc.3`
+(`7847b7f7ae761d41dc07784cd0308c29127b7ff9`) via `scripts/sync-rc.sh`, classified
 `minor` against `v0.19.0` (`3fce95465cdea1edc8456dbd1c6691d1c8dc1f2e`).
 
-## Storage migrations (one-way, schema 218 → 227)
+## Storage migrations (one-way, schema 218 → 228)
 
-MarmotKit 0.20.0 advances the per-account SQLite schema from **218** to **227**
-(plus the empty-database `baseline.sql` starting point):
+MarmotKit 0.20.0 advances the per-account SQLite schema from **218** to **228**
+(plus the empty-database `baseline.sql`, directory cache `0004_follows_created_at`,
+and shared storage `0006_directory_follows_created_at`):
 
 - `0219_agent_item_order.rs`
 - `0220_chat_activity_creation_fallback.rs`
@@ -18,6 +19,7 @@ MarmotKit 0.20.0 advances the per-account SQLite schema from **218** to **227**
 - `0225_welcome_delivery_ledger.rs`
 - `0226_local_submission_refused.rs`
 - `0227_welcome_expiry_mark.rs`
+- `0228_canonicalize_group_id_hex.rs`
 
 **Downgrade across these migrations is unsupported.** An older build (0.19.0 or
 earlier) refuses an upgraded account database.
@@ -48,21 +50,6 @@ earlier) refuses an upgraded account database.
   and `OnboardingIssueFfi.rateLimited`.
 - **Generated subscription cancellation:** `OnboardingSubscription` and
   `EventsSubscription` now ship generated `nextCancellable()` alongside the
-  existing five snapshot subscriptions.
-
-## Known RC issue to resolve before Stable `0.20.0`
-
-- **UniFFI async cancellation ABBA deadlock (`0.20.0-rc.2`):** The generated
-  `uniffiRustCallAsync` helper added in `0.20.0-rc.2` calls
-  `ffi_marmot_uniffi_rust_future_cancel_*` synchronously inside
-  `withTaskCancellationHandler`'s `onCancel` closure while Swift Concurrency
-  holds the `AsyncTask`'s `StatusRecordLock`. If a `marmotkit-rt` Tokio worker
-  wakes that same `RustFuture` concurrently, `uniffi_core::RustFuture::wake`
-  holds the future's `std::sync::Mutex` while calling
-  `uniffiFutureContinuationCallback` → `UnsafeContinuation.resume(returning:)`,
-  which acquires `StatusRecordLock`, deadlocking both threads (reproduced under
-  heavy cancellation churn in `AppStateBootstrapTests` during
-  `NotificationDriver.stop()` → `subscribeNotifications()` cancellation). Fix
-  upstream in `marmot-protocol/mdk` (e.g. dispatch `cancelFunc` off `onCancel`
-  or resume outside the `RustFuture` mutex) and pick up the next RC via
-  `just sync-rc` before promoting `0.20.0` to Stable.
+  existing five snapshot subscriptions, and `uniffiRustCallAsync` dispatches
+  native cancellation off Swift's `onCancel` lock (`marmot-protocol/mdk#3821`).
+- **`MarmotOptions`:** Gains `disablePublicAvatarAcquisition: Bool = false`.

@@ -35377,6 +35377,10 @@ public struct MarmotOptions {
     public var secretStore: SecretStore?
     public var attachmentAcquisitionMode: AttachmentAcquisitionModeFfi?
     /**
+     * Disable background acquisition of public avatar URLs. Defaults to false.
+     */
+    public var disablePublicAvatarAcquisition: Bool
+    /**
      * Destination for private moderation reports (`submit_moderation_report`). Set per
      * build flavor. Invalid values leave reporting unconfigured; `configure_moderation_reporting`
      * reports why.
@@ -35400,6 +35404,9 @@ public struct MarmotOptions {
          * screen (mdk#2628 3.6). Blank, or over 64 bytes once trimmed, is left out.
          */devicePlatform: String? = nil, secretStore: SecretStore? = nil, attachmentAcquisitionMode: AttachmentAcquisitionModeFfi? = nil,
         /**
+         * Disable background acquisition of public avatar URLs. Defaults to false.
+         */disablePublicAvatarAcquisition: Bool = false,
+        /**
          * Destination for private moderation reports (`submit_moderation_report`). Set per
          * build flavor. Invalid values leave reporting unconfigured; `configure_moderation_reporting`
          * reports why.
@@ -35417,6 +35424,7 @@ public struct MarmotOptions {
         self.devicePlatform = devicePlatform
         self.secretStore = secretStore
         self.attachmentAcquisitionMode = attachmentAcquisitionMode
+        self.disablePublicAvatarAcquisition = disablePublicAvatarAcquisition
         self.moderationReportConfig = moderationReportConfig
         self.deployment = deployment
     }
@@ -35441,6 +35449,7 @@ public struct FfiConverterTypeMarmotOptions: FfiConverterRustBuffer {
                 devicePlatform: FfiConverterOptionString.read(from: &buf),
                 secretStore: FfiConverterOptionTypeSecretStore.read(from: &buf),
                 attachmentAcquisitionMode: FfiConverterOptionTypeAttachmentAcquisitionModeFfi.read(from: &buf),
+                disablePublicAvatarAcquisition: FfiConverterBool.read(from: &buf),
                 moderationReportConfig: FfiConverterOptionTypeModerationReportConfigFfi.read(from: &buf),
                 deployment: FfiConverterTypeMarmotDeploymentFfi.read(from: &buf)
         )
@@ -35453,6 +35462,7 @@ public struct FfiConverterTypeMarmotOptions: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.devicePlatform, into: &buf)
         FfiConverterOptionTypeSecretStore.write(value.secretStore, into: &buf)
         FfiConverterOptionTypeAttachmentAcquisitionModeFfi.write(value.attachmentAcquisitionMode, into: &buf)
+        FfiConverterBool.write(value.disablePublicAvatarAcquisition, into: &buf)
         FfiConverterOptionTypeModerationReportConfigFfi.write(value.moderationReportConfig, into: &buf)
         FfiConverterTypeMarmotDeploymentFfi.write(value.deployment, into: &buf)
     }
@@ -45078,8 +45088,9 @@ public struct TimelineMessageRecordFfi {
     public var agentItem: AgentItemFfi?
     /**
      * True for an agent item whose first event this device does not hold,
-     * such as one that began before this member joined: the row is its
-     * earliest edit, at that edit's place, showing the latest version. Say
+     * such as one that began before this member joined: the row is the
+     * first edit of it this device received, at that edit's place, showing
+     * the latest version. Say
      * the item started earlier. False once the first event arrives.
      */
     public var agentItemFirstEventMissing: Bool
@@ -45189,8 +45200,9 @@ public struct TimelineMessageRecordFfi {
          */agentItem: AgentItemFfi?,
         /**
          * True for an agent item whose first event this device does not hold,
-         * such as one that began before this member joined: the row is its
-         * earliest edit, at that edit's place, showing the latest version. Say
+         * such as one that began before this member joined: the row is the
+         * first edit of it this device received, at that edit's place, showing
+         * the latest version. Say
          * the item started earlier. False once the first event arrives.
          */agentItemFirstEventMissing: Bool, reactions: TimelineReactionSummaryFfi, edit: TimelineEditSummaryFfi?, deleted: Bool, deletionSource: DeletionSourceFfi, deletedByMessageIdHex: String?,
         /**
@@ -70395,18 +70407,23 @@ fileprivate func uniffiRustCallAsync<F, T>(
         freeFunc(rustFuture)
     }
     await withTaskCancellationHandler {
-        var pollResult: Int8
-        repeat {
-            pollResult = await withUnsafeContinuation {
+        while true {
+            if cancellation.canCancel && Task.isCancelled {
+                break
+            }
+            let pollResult = await withUnsafeContinuation {
                 pollFunc(
                     rustFuture,
                     uniffiFutureContinuationCallback,
                     uniffiContinuationHandleMap.insert(obj: $0)
                 )
             }
-        } while pollResult != UNIFFI_RUST_FUTURE_POLL_READY
+            if pollResult == UNIFFI_RUST_FUTURE_POLL_READY {
+                break
+            }
+        }
     } onCancel: {
-        cancellation.cancel()
+        cancellation.scheduleCancel()
     }
 
     var callStatus = RustCallStatus.init()
@@ -70419,17 +70436,34 @@ fileprivate func uniffiRustCallAsync<F, T>(
 }
 
 // The lock keeps a late cancellation from using the handle after it is freed.
+// `scheduleCancel()` dispatches off Swift's `onCancel` handler because
+// `swift_task_cancelImpl` holds the task's StatusRecordLock while invoking it,
+// whereas `uniffi_core::RustFuture::wake` holds its scheduler Mutex while
+// resuming the continuation (which acquires StatusRecordLock). Calling
+// `cancelFunc` synchronously inside `onCancel` inverts that lock order and
+// deadlocks (mdk#3821).
 fileprivate final class UniffiRustFutureCancellation: @unchecked Sendable {
     private let lock = NSLock()
     private var rustFuture: UInt64?
     private let cancelFunc: ((UInt64) -> ())?
+
+    var canCancel: Bool {
+        cancelFunc != nil
+    }
 
     init(_ rustFuture: UInt64, _ cancelFunc: ((UInt64) -> ())?) {
         self.rustFuture = rustFuture
         self.cancelFunc = cancelFunc
     }
 
-    func cancel() {
+    func scheduleCancel() {
+        guard cancelFunc != nil else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.cancel()
+        }
+    }
+
+    private func cancel() {
         lock.lock()
         defer { lock.unlock() }
         if let rustFuture, let cancelFunc {
