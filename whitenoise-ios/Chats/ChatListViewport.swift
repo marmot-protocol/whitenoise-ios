@@ -69,6 +69,28 @@ final class ChatListViewport {
         }
     }
 
+    func attachScrollView(_ scroll: UIScrollView) {
+        scrollView = scroll
+    }
+
+    var distanceToBottom: CGFloat? {
+        guard let scrollView, scrollView.window != nil, scrollView.bounds.height > 0,
+              scrollView.contentSize.height > 0 else { return nil }
+        let inset = scrollView.adjustedContentInset
+        let end = TimelineTailMeasurement.bottomOffset(contentHeight: scrollView.contentSize.height,
+            viewportHeight: scrollView.bounds.height, topInset: inset.top, bottomInset: inset.bottom)
+        return end - scrollView.contentOffset.y
+    }
+
+    /// Lazy layout can leave the opening offset below all the rows, including the scroll target.
+    func clampOpeningOverscroll() -> Bool {
+        guard let scrollView, !Self.isUserScrolling(scrollView), let distanceToBottom,
+              distanceToBottom < -TimelineBottomScrollCoordinator.overscrollTolerance else { return false }
+        scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x,
+                                            y: scrollView.contentOffset.y + distanceToBottom), animated: false)
+        return true
+    }
+
     func register(_ view: ChatListAnchorView) {
         rows[view.groupId] = WeakRow(view)
         if rows.count >= pruneThreshold {
@@ -76,7 +98,7 @@ final class ChatListViewport {
         }
         var ancestor = view.superview
         while let current = ancestor {
-            if let scroll = current as? UIScrollView { scrollView = scroll; break }
+            if let scroll = current as? UIScrollView { attachScrollView(scroll); break }
             ancestor = current.superview
         }
         // A lazy restoration for a window that has since been replaced can no longer be met.

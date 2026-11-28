@@ -1,4 +1,5 @@
 import MarmotKit
+import SwiftUI
 import Testing
 import UIKit
 @testable import whitenoise_ios
@@ -85,6 +86,40 @@ struct ChatListViewportTests {
         scroll.contentOffset = CGPoint(x: 0, y: 100 * rowHeight)
         scroll.layoutIfNeeded()
         #expect(viewport.visibleAnchor() == "100")
+    }
+
+    @Test func openingBelowAllMessagesReturnsToTheVisibleTailWithoutUserInput() async throws {
+        let viewport = ChatListViewport()
+        let (window, scroll) = try makeList(ids: [], viewport: viewport)
+        defer { window.isHidden = true; window.rootViewController = nil }
+        scroll.contentInset.bottom = 20
+        func measurement() -> TimelineTailMeasurement {
+            let inset = scroll.adjustedContentInset
+            let geometry = ScrollGeometry(contentOffset: scroll.contentOffset, contentSize: scroll.contentSize,
+                contentInsets: EdgeInsets(top: inset.top, leading: inset.left, bottom: inset.bottom, trailing: inset.right),
+                containerSize: scroll.bounds.size)
+            return TimelineTailMeasurement(lastRowID: "127", geometry: geometry, isOpening: true)
+        }
+        // Unused space while only the first row is measured is a legal opening position.
+        scroll.contentSize.height = rowHeight
+        #expect(measurement().permitsOpeningConfirmation(lastRowID: "127"))
+        scroll.contentSize.height = 128 * rowHeight
+        let lastRow = CGRect(x: 0, y: scroll.contentSize.height - rowHeight, width: 100, height: rowHeight)
+        let end = scroll.contentSize.height + scroll.adjustedContentInset.bottom - scroll.bounds.height
+        scroll.contentOffset.y = end + 850
+        #expect(!scroll.bounds.inset(by: scroll.adjustedContentInset).intersects(lastRow))
+        #expect(!measurement().permitsOpeningConfirmation(lastRowID: "127"))
+        // No lazy row can attach the viewport while the screen is entirely blank.
+        let attachment = TimelineKeyboardDismissAttachmentView()
+        attachment.onScrollViewReady = { scroll in
+            viewport.attachScrollView(scroll)
+            _ = viewport.clampOpeningOverscroll()
+        }
+        scroll.addSubview(attachment)
+        try await eventually { scroll.bounds.inset(by: scroll.adjustedContentInset).contains(lastRow) }
+        #expect(abs(scroll.contentOffset.y - end) <= 1)
+        #expect(measurement().permitsOpeningConfirmation(lastRowID: "127"))
+        #expect(!viewport.clampOpeningOverscroll())
     }
 
     @Test func retainedRowKeepsPixelOffsetAfterLeadingRowsAreEvicted() throws {
