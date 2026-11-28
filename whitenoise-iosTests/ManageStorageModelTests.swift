@@ -13,22 +13,13 @@ struct ManageStorageModelTests {
 
     private static func model(chats: [String], attachmentChats: [String] = []) -> ManageStorageModel {
         ManageStorageModel.fixture(
-            usage: AttachmentStorageUsageFfi(mediaBytes: 0, legacyBytes: 0, attachmentCount: 0, databaseBytes: 0,
-                                             databaseFreeBytes: 0, migration: .notNeeded, migrationBytes: 0,
-                                             cacheBytes: 0),
-            chats: chats.map { (ChatAttachmentUsageFfi(groupIdHex: $0, bytes: 1, attachmentCount: 1), "Before") },
-            attachments: attachmentChats.map {
-                RetainedAttachmentSummaryFfi(
-                    groupIdHex: $0,
-                    target: AttachmentLocalTargetFfi(messageIdHex: "m-\($0)", sourceMessageIdHex: "m-\($0)",
-                                                     attachmentIndex: 0),
-                    byteCount: 1, mediaType: "image/jpeg", fileName: "", receivedAt: 1
-                )
-            }
+            usage: storageUsage(),
+            chats: chats.map { (chatUsage($0), "Before") },
+            attachments: attachmentChats.map(retainedAttachment)
         )
     }
 
-    private static func presented(_ groupIdHex: String, title: String, asset: AvatarAssetFfi?,
+    fileprivate static func presented(_ groupIdHex: String, title: String, asset: AvatarAssetFfi?,
                                   pending: Bool = false) -> PresentedChatRowFfi {
         let row = ChatListRowFfi(
             groupIdHex: groupIdHex, pinned: false, pinnedPosition: nil, archived: false,
@@ -131,5 +122,424 @@ struct ManageStorageRemovalTests {
 
         #expect(MarmotClient.plaintextHash(in: entries, for: target) == String(repeating: "4", count: 64))
         #expect(MarmotClient.plaintextHash(in: Array(entries.dropLast()), for: target) == nil)
+    }
+}
+
+/// Listings read page by page from the profile and runtime they started on,
+/// and start over whenever either changes or something is removed.
+@MainActor
+struct ManageStorageListingTests {
+    @Test func listingFollowsMDKsCursorAndStopsAfterTheLastPage() async {
+        let runtime = StorageRuntimeStub()
+        let last = ChatStoragePageFfi(chats: [chatUsage("second")], nextCursor: nil)
+        let first = ChatStoragePageFfi(chats: [chatUsage("first")], nextCursor: ChatStorageCursor(noPointer: .init()))
+        runtime.chatPages = [first, last]
+        runtime.titles = ["first": "Hiking", "second": "Book Club"]
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+
+        await model.bind(using: appState)
+        #expect(model.chats.items.map(\.groupIdHex) == ["first"])
+        #expect(model.identity(for: "first").title == "Hiking")
+        #expect(model.usage != nil)
+        #expect(model.keepMedia == .forever)
+
+        await model.loadMoreChats(using: appState)
+        await model.loadMoreChats(using: appState)
+
+        #expect(model.chats.items.map(\.groupIdHex) == ["first", "second"])
+        #expect(model.identity(for: "second").title == "Book Club")
+        #expect(runtime.chatReads.count == 2)
+        #expect(runtime.chatReads.first! == nil)
+        #expect(runtime.chatReads.last! === first.nextCursor)
+    }
+
+    enum Change: CaseIterable { case profileSwitched, runtimeRebuilt, runtimeSuspended }
+
+    /// A page MDK returns after the screen's profile or runtime changed belongs
+    /// to another listing, so it never lands in this one.
+    @Test(arguments: Change.allCases)
+    func aPageReadBeforeAChangeIsDropped(_ change: Change) async {
+        let runtime = StorageRuntimeStub()
+        runtime.chatPages = [ChatStoragePageFfi(chats: [chatUsage("old")], nextCursor: nil)]
+        let gate = AsyncTestCheckpoint()
+        runtime.chatsGate = gate
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+
+        let binding = Task { await model.bind(using: appState) }
+        await gate.waitUntilPaused()
+        switch change {
+        case .profileSwitched: appState.activeAccountRef = "other"
+        case .runtimeRebuilt: runtime.generation += 1
+        case .runtimeSuspended: runtime.available = false
+        }
+        await gate.release()
+        await binding.value
+
+        #expect(model.chats.items.isEmpty)
+        #expect(!model.chatsFailed)
+        #expect(!model.isLoadingChats)
+        #expect(runtime.presentedRowReads.isEmpty)
+    }
+
+    @Test func aRemovalStartsEveryListingOverAndDropsPagesReadBeforeIt() async {
+        let runtime = StorageRuntimeStub()
+        runtime.chatPages = [ChatStoragePageFfi(chats: [chatUsage("chat")], nextCursor: nil)]
+        runtime.attachmentPages = [RetainedAttachmentsPageFfi(attachments: [retainedAttachment("chat")],
+                                                              nextCursor: nil)]
+        let gate = AsyncTestCheckpoint()
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+        await model.bind(using: appState)
+        let epoch = model.epoch
+
+        runtime.attachmentsGate = gate
+        let loading = Task { await model.loadMoreAttachments(.chat("chat"), using: appState) }
+        await gate.waitUntilPaused()
+        await model.removeAllAttachments(inChat: "chat", using: appState)
+        await gate.release()
+        await loading.value
+
+        #expect(model.epoch > epoch)
+        #expect(model.attachmentPages(.chat("chat")).items.isEmpty)
+        #expect(model.attachmentPages(.chat("chat")).hasMore)
+        #expect(runtime.chatReads.count == 2)
+        #expect(runtime.chatReads.allSatisfy { $0 == nil })
+        #expect(model.chats.items.map(\.groupIdHex) == ["chat"])
+    }
+
+    /// Each scope pages on its own: a failure marks only its own listing, and
+    /// the account-wide one names the chats it lists.
+    @Test func attachmentListingsArePerScope() async {
+        let runtime = StorageRuntimeStub()
+        runtime.attachmentPages = [RetainedAttachmentsPageFfi(attachments: [retainedAttachment("chat")],
+                                                              nextCursor: nil)]
+        runtime.titles = ["chat": "Hiking"]
+        runtime.failingAttachmentScopes = ["broken"]
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+        await model.bind(using: appState)
+
+        await model.loadMoreAttachments(.account, using: appState)
+        await model.loadMoreAttachments(.chat("broken"), using: appState)
+
+        #expect(model.attachmentPages(.account).items.map(\.groupIdHex) == ["chat"])
+        #expect(model.identity(for: "chat").title == "Hiking")
+        #expect(model.attachmentsFailed == [.chat("broken")])
+        #expect(runtime.attachmentReads == [nil, "broken"])
+    }
+
+    @Test func aFailedPageIsShownAndRetriedFromTheSameCursor() async {
+        let runtime = StorageRuntimeStub()
+        runtime.chatPages = [ChatStoragePageFfi(chats: [chatUsage("chat")], nextCursor: nil)]
+        runtime.failingChatReads = 1
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+
+        await model.bind(using: appState)
+        #expect(model.chatsFailed)
+        #expect(model.chats.items.isEmpty)
+
+        await model.loadMoreChats(using: appState)
+        #expect(!model.chatsFailed)
+        #expect(model.chats.items.map(\.groupIdHex) == ["chat"])
+        #expect(runtime.chatReads.count == 2)
+        #expect(runtime.chatReads.allSatisfy { $0 == nil })
+    }
+}
+
+/// Removals report MDK's count and drop the host's decrypted copies of what
+/// MDK removed, and no more.
+@MainActor
+struct ManageStorageRemovalRunTests {
+    @Test func keepMediaReportsMDKsCountAndShowsTheSavedWindow() async {
+        let runtime = StorageRuntimeStub()
+        runtime.keepMediaRemoves = .success(4)
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+        await model.bind(using: appState)
+        runtime.keepMediaRead = .failure(StorageStubError.failed)
+
+        let removed = await model.setKeepMedia(.thirtyDays, using: appState)
+
+        #expect(removed == 4)
+        #expect(runtime.keepMediaSets == [.thirtyDays])
+        // Saved, so the window stands although reading it back failed.
+        #expect(model.keepMedia == .thirtyDays)
+        #expect(model.failedOperation == nil)
+        #expect(runtime.purges == 1)
+        #expect(runtime.changesEnded == runtime.changesBegun)
+    }
+
+    @Test func aKeepMediaChangeThatOutlivesItsProfileReportsNoCount() async {
+        let runtime = StorageRuntimeStub()
+        runtime.keepMediaRemoves = .success(4)
+        let gate = AsyncTestCheckpoint()
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+        await model.bind(using: appState)
+
+        runtime.keepMediaGate = gate
+        let change = Task { await model.setKeepMedia(.thirtyDays, using: appState) }
+        await gate.waitUntilPaused()
+        appState.activeAccountRef = "other"
+        await gate.release()
+
+        #expect(await change.value == nil)
+        #expect(model.keepMedia == .forever)
+        #expect(model.failedOperation == nil)
+        #expect(runtime.changesEnded == runtime.changesBegun)
+    }
+
+    enum Outcome: CaseIterable { case removedSome, removedNone, failed }
+
+    /// A bulk removal can't name what it removed, so any that may have removed
+    /// something drops every decrypted copy; one that reported none keeps them.
+    @Test(arguments: Outcome.allCases)
+    func bulkRemovalDropsDecryptedMediaWhenMDKMayHaveRemovedSome(_ outcome: Outcome) async {
+        let runtime = StorageRuntimeStub()
+        runtime.removeChatResult = switch outcome {
+        case .removedSome: .success(2)
+        case .removedNone: .success(0)
+        case .failed: .failure(StorageStubError.failed)
+        }
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+        await model.bind(using: appState)
+
+        await model.removeAllAttachments(inChat: "chat", using: appState)
+
+        #expect(runtime.removedChats == ["chat"])
+        #expect(runtime.purges == (outcome == .removedNone ? 0 : 1))
+        let failed: ManageStorageModel.Operation? = outcome == .failed ? .removeChat("chat") : nil
+        #expect(model.failedOperation == failed)
+        #expect(model.operation == nil)
+        #expect(runtime.changesEnded == runtime.changesBegun)
+    }
+
+    /// MDK removes exactly what the confirmation named: its cutoff, in its scope.
+    @Test(arguments: [ManageStorageModel.Scope.account, .chat("chat")])
+    func removeOlderPassesTheConfirmedCutoffAndScope(_ scope: ManageStorageModel.Scope) async {
+        let runtime = StorageRuntimeStub()
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+        await model.bind(using: appState)
+        let cutoff = ManageStoragePresentation.RemovalCutoff(age: .oneMonth, now: Date(timeIntervalSince1970: 1e9),
+                                                             calendar: Calendar(identifier: .gregorian))
+
+        await model.removeOlder(than: cutoff, in: scope, using: appState)
+
+        #expect(runtime.olderRemovals.count == 1)
+        #expect(runtime.olderRemovals.first?.receivedBefore == cutoff.receivedBefore)
+        #expect(runtime.olderRemovals.first?.groupIdHex == scope.groupIdHex)
+        #expect(model.failedOperation == nil)
+    }
+
+    @Test func aRemovalTheRuntimeRefusesRemovesNothing() async {
+        let runtime = StorageRuntimeStub()
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+        await model.bind(using: appState)
+        runtime.refusesChanges = true
+
+        await model.removeAllAttachments(inChat: "chat", using: appState)
+
+        #expect(runtime.removedChats.isEmpty)
+        #expect(runtime.purges == 0)
+        #expect(model.failedOperation == .removeChat("chat"))
+    }
+
+    @Test func removingOneAttachmentDropsOnlyItsOwnDecryptedCopy() async {
+        let runtime = StorageRuntimeStub()
+        runtime.plaintextHash = "hash"
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+        await model.bind(using: appState)
+
+        await model.remove(retainedAttachment("chat"), using: appState)
+
+        #expect(runtime.droppedHashes == ["hash"])
+        #expect(runtime.purges == 0)
+        #expect(model.failedOperation == nil)
+    }
+
+    /// An entry that no longer reads locally is already gone: nothing to drop.
+    @Test func removingAnAttachmentThatIsAlreadyGoneDropsNothing() async {
+        let runtime = StorageRuntimeStub()
+        runtime.removesAttachment = false
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+        await model.bind(using: appState)
+        let attachment = retainedAttachment("chat")
+
+        await model.remove(attachment, using: appState)
+
+        #expect(runtime.droppedHashes.isEmpty)
+        #expect(runtime.purges == 0)
+        #expect(model.failedOperation == .removeAttachment(ManageStoragePresentation.attachmentID(attachment)))
+    }
+
+    @Test func oneChangeRunsAtATime() async {
+        let runtime = StorageRuntimeStub()
+        runtime.removeChatResult = .success(1)
+        let gate = AsyncTestCheckpoint()
+        let model = ManageStorageModel(dependencies: runtime.dependencies)
+        let appState = runtime.appState()
+        await model.bind(using: appState)
+
+        runtime.removeChatGate = gate
+        let removing = Task { await model.removeAllAttachments(inChat: "chat", using: appState) }
+        await gate.waitUntilPaused()
+        await model.clearCache(using: appState)
+        #expect(model.operation == .removeChat("chat"))
+        await gate.release()
+        await removing.value
+
+        #expect(runtime.avatarCacheClears == 0)
+        #expect(runtime.changesBegun == 1)
+        #expect(model.operation == nil)
+    }
+}
+
+private enum StorageStubError: Error { case failed }
+
+private func storageUsage() -> AttachmentStorageUsageFfi {
+    AttachmentStorageUsageFfi(mediaBytes: 0, legacyBytes: 0, attachmentCount: 0, databaseBytes: 0,
+                              databaseFreeBytes: 0, migration: .notNeeded, migrationBytes: 0, cacheBytes: 0)
+}
+
+private func chatUsage(_ groupIdHex: String) -> ChatAttachmentUsageFfi {
+    ChatAttachmentUsageFfi(groupIdHex: groupIdHex, bytes: 1, attachmentCount: 1)
+}
+
+private func retainedAttachment(_ groupIdHex: String) -> RetainedAttachmentSummaryFfi {
+    RetainedAttachmentSummaryFfi(
+        groupIdHex: groupIdHex,
+        target: AttachmentLocalTargetFfi(messageIdHex: "m-\(groupIdHex)", sourceMessageIdHex: "m-\(groupIdHex)",
+                                         attachmentIndex: 0),
+        byteCount: 1, mediaType: "image/jpeg", fileName: "", receivedAt: 1
+    )
+}
+
+/// Stands in for the active profile's MDK runtime. Pages are served by the
+/// cursor the model passes; a gate holds the next call of its kind once.
+@MainActor
+private final class StorageRuntimeStub {
+    var available = true
+    var generation = 0
+    var refusesChanges = false
+    var chatPages = [ChatStoragePageFfi(chats: [], nextCursor: nil)]
+    var attachmentPages = [RetainedAttachmentsPageFfi(attachments: [], nextCursor: nil)]
+    var titles: [String: String] = [:]
+    var failingChatReads = 0
+    var failingAttachmentScopes: Set<String> = []
+    var keepMediaRead: Result<AttachmentKeepMediaFfi, Error> = .success(.forever)
+    var keepMediaRemoves: Result<UInt64, Error> = .success(0)
+    var removeChatResult: Result<UInt64, Error> = .success(0)
+    var removesAttachment = true
+    var plaintextHash: String?
+    var chatsGate: AsyncTestCheckpoint?
+    var attachmentsGate: AsyncTestCheckpoint?
+    var keepMediaGate: AsyncTestCheckpoint?
+    var removeChatGate: AsyncTestCheckpoint?
+
+    private(set) var chatReads: [ChatStorageCursor?] = []
+    private(set) var presentedRowReads: [String] = []
+    private(set) var attachmentReads: [String?] = []
+    private(set) var olderRemovals: [(receivedBefore: UInt64, groupIdHex: String?)] = []
+    private(set) var keepMediaSets: [AttachmentKeepMediaFfi] = []
+    private(set) var removedChats: [String] = []
+    private(set) var avatarCacheClears = 0
+    private(set) var droppedHashes: [String?] = []
+    private(set) var purges = 0
+    private(set) var changesBegun = 0
+    private(set) var changesEnded = 0
+
+    func appState() -> AppState {
+        let appState = AppState.test()
+        appState.activeAccountRef = "account"
+        return appState
+    }
+
+    var dependencies: ManageStorageModel.Dependencies {
+        ManageStorageModel.Dependencies(
+            runtime: { appState in
+                guard self.available, let accountRef = appState.activeAccountRef else { return nil }
+                return .init(accountRef: accountRef, generation: self.generation, id: ObjectIdentifier(self),
+                             calls: self.calls)
+            },
+            beginChange: { _ in
+                if self.refusesChanges { throw ForegroundRuntimeMutationError.runtimeUnavailable }
+                self.changesBegun += 1
+                return .init(runtimeID: ObjectIdentifier(self), calls: self.calls, end: { self.changesEnded += 1 })
+            },
+            dropDecryptedCopy: { self.droppedHashes.append($0) },
+            dropAllDecryptedMedia: { self.purges += 1 }
+        )
+    }
+
+    private var calls: ManageStorageCalls {
+        ManageStorageCalls(
+            usage: { _ in storageUsage() },
+            keepMedia: { _ in try self.keepMediaRead.get() },
+            chats: { _, _, cursor in
+                self.chatReads.append(cursor)
+                await self.take(\.chatsGate)?.pause()
+                if self.failingChatReads > 0 {
+                    self.failingChatReads -= 1
+                    throw StorageStubError.failed
+                }
+                return Self.page(after: cursor, in: self.chatPages, next: \.nextCursor)
+            },
+            attachments: { _, groupIdHex, _, cursor in
+                self.attachmentReads.append(groupIdHex)
+                await self.take(\.attachmentsGate)?.pause()
+                if let groupIdHex, self.failingAttachmentScopes.contains(groupIdHex) { throw StorageStubError.failed }
+                return Self.page(after: cursor, in: self.attachmentPages, next: \.nextCursor)
+            },
+            presentedRow: { _, groupIdHex in
+                self.presentedRowReads.append(groupIdHex)
+                return self.titles[groupIdHex].map {
+                    ManageStorageModelTests.presented(groupIdHex, title: $0, asset: nil)
+                }
+            },
+            openPresentedRows: { _ in throw CancellationError() },
+            presentedRowsSnapshot: { _ in nil },
+            clearAvatarCache: { _ in self.avatarCacheClears += 1 },
+            removeOlder: { _, receivedBefore, groupIdHex in
+                self.olderRemovals.append((receivedBefore, groupIdHex))
+                return 0
+            },
+            setKeepMedia: { _, keep in
+                self.keepMediaSets.append(keep)
+                await self.take(\.keepMediaGate)?.pause()
+                return try self.keepMediaRemoves.get()
+            },
+            removeChat: { _, groupIdHex in
+                self.removedChats.append(groupIdHex)
+                await self.take(\.removeChatGate)?.pause()
+                return try self.removeChatResult.get()
+            },
+            removeAttachment: { _, _, _ in self.removesAttachment },
+            plaintextHash: { _, _, _ in self.plaintextHash }
+        )
+    }
+
+    private func take(_ gate: ReferenceWritableKeyPath<StorageRuntimeStub, AsyncTestCheckpoint?>)
+        -> AsyncTestCheckpoint? {
+        defer { self[keyPath: gate] = nil }
+        return self[keyPath: gate]
+    }
+
+    /// The first page for no cursor, otherwise the page after the one that gave it.
+    private static func page<Page, Cursor: AnyObject>(after cursor: Cursor?, in pages: [Page],
+                                                      next: (Page) -> Cursor?) -> Page {
+        guard let cursor else { return pages[0] }
+        guard let index = pages.firstIndex(where: { next($0) === cursor }), index + 1 < pages.count else {
+            Issue.record("read with a cursor no page gave")
+            return pages[pages.count - 1]
+        }
+        return pages[index + 1]
     }
 }
