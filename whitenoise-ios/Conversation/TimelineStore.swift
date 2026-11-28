@@ -930,28 +930,36 @@ final class TimelineStore {
         }
     }
 
+    private func canonicalMessageOrder() -> [String] {
+        if let preparedOrder {
+            return preparedOrder
+        }
+        return messageById.values
+            .sorted { lhs, rhs in
+                let lts = TimelineItem.sortTimestamp(for: lhs)
+                let rts = TimelineItem.sortTimestamp(for: rhs)
+                return lts == rts ? lhs.messageIdHex < rhs.messageIdHex : lts < rts
+            }
+            .map(\.messageIdHex)
+    }
+
     /// Active running main-chat turns, newest last (one per agent pubkey when running).
     func activeRunningTurns() -> [AgentItemProjection] {
         _ = timelineProjectionGeneration
-        let order = preparedOrder ?? Array(messageById.keys)
-        var latestByAgent: [String: AgentItemProjection] = [:]
-        var agentOrder: [String] = []
-        for id in order {
+        let order = canonicalMessageOrder()
+        var latestByAgent: [String: (index: Int, projection: AgentItemProjection)] = [:]
+        for (index, id) in order.enumerated() {
             guard !deletedProjections.contains(id),
                   let projection = agentItemProjectionByMessageId[id],
                   case .turn = projection.body,
                   !isBlockedAuthor(projection.sender),
                   !subagentThreadIndex.hiddenFromMainTimeline.contains(id)
             else { continue }
-            if latestByAgent[projection.sender] == nil {
-                agentOrder.append(projection.sender)
-            }
-            latestByAgent[projection.sender] = projection
+            latestByAgent[projection.sender] = (index, projection)
         }
-        return agentOrder.compactMap { sender in
-            guard let latest = latestByAgent[sender], latest.item.state == .running else { return nil }
-            return latest
-        }
+        return latestByAgent.values
+            .sorted { $0.index < $1.index }
+            .compactMap { $0.projection.item.state == .running ? $0.projection : nil }
     }
 
     /// Main-chat subagent task rows whose thread currently holds a waiting
@@ -959,7 +967,7 @@ final class TimelineStore {
     /// while the parent agent posts more rows below.
     func waitingSubagentTasks() -> [(task: AgentItemProjection, waiting: AgentItemProjection)] {
         _ = timelineProjectionGeneration
-        let order = preparedOrder ?? Array(messageById.keys)
+        let order = canonicalMessageOrder()
         var results: [(task: AgentItemProjection, waiting: AgentItemProjection)] = []
         for id in order {
             guard !deletedProjections.contains(id),
@@ -968,9 +976,7 @@ final class TimelineStore {
                   !isBlockedAuthor(task.sender),
                   !subagentThreadIndex.hiddenFromMainTimeline.contains(id),
                   let summary = subagentThreadIndex.summariesByTaskMessageId[id],
-                  let waiting = summary.waitingInteractions.last(where: {
-                      !isBlockedAuthor($0.sender) && !deletedProjections.contains($0.messageIdHex)
-                  })
+                  let waiting = summary.waitingInteractions.last(where: { !isBlockedAuthor($0.sender) })
             else { continue }
             results.append((task: task, waiting: waiting))
         }
@@ -980,21 +986,19 @@ final class TimelineStore {
     /// Latest `session` item per agent in this chat, newest last.
     func latestAgentSessions() -> [AgentItemProjection] {
         _ = timelineProjectionGeneration
-        let order = preparedOrder ?? Array(messageById.keys)
-        var latestByAgent: [String: AgentItemProjection] = [:]
-        var agentOrder: [String] = []
-        for id in order {
+        let order = canonicalMessageOrder()
+        var latestByAgent: [String: (index: Int, projection: AgentItemProjection)] = [:]
+        for (index, id) in order.enumerated() {
             guard !deletedProjections.contains(id),
                   let projection = agentItemProjectionByMessageId[id],
                   case .session = projection.body,
                   !isBlockedAuthor(projection.sender)
             else { continue }
-            if latestByAgent[projection.sender] == nil {
-                agentOrder.append(projection.sender)
-            }
-            latestByAgent[projection.sender] = projection
+            latestByAgent[projection.sender] = (index, projection)
         }
-        return agentOrder.compactMap { latestByAgent[$0] }
+        return latestByAgent.values
+            .sorted { $0.index < $1.index }
+            .map(\.projection)
     }
 
     // MARK: - Page application (driven by the view model's IO)
@@ -1418,18 +1422,7 @@ final class TimelineStore {
         if agentItemProjectionByMessageId.isEmpty {
             nextIndex = .empty
         } else {
-            let orderedIds: [String]
-            if let preparedOrder {
-                orderedIds = preparedOrder
-            } else {
-                orderedIds = messageById.values
-                    .sorted { lhs, rhs in
-                        let lts = TimelineItem.sortTimestamp(for: lhs)
-                        let rts = TimelineItem.sortTimestamp(for: rhs)
-                        return lts == rts ? lhs.messageIdHex < rhs.messageIdHex : lts < rts
-                    }
-                    .map(\.messageIdHex)
-            }
+            let orderedIds = canonicalMessageOrder()
             let senderById = messageById.mapValues(\.sender)
             nextIndex = AgentSubagentThreadIndex.build(
                 orderedMessageIds: orderedIds,

@@ -1426,6 +1426,45 @@ struct AgentItemSupportTests {
         #expect(viewModel.waitingAgentSubagents.isEmpty)
     }
 
+    @MainActor
+    @Test func latestAgentSessionsOrdersByRetainedSessionNotFirstAppearance() {
+        let viewModel = ConversationViewModel(appState: AppState.test(), group: group(name: "Agent Chat", id: hex("bb")))
+        let agentA = hex("aa")
+        let agentB = hex("bb")
+        let sA1 = timelineRecord(
+            messageIdHex: hex("51"),
+            groupIdHex: hex("bb"),
+            sender: agentA,
+            plaintext: "",
+            kind: MessageSemantics.kindAgentActivity,
+            timelineAt: 1,
+            agentItem: makeAgentItem(itemId: "sa1", itemType: "session", state: .running, title: "A1", fieldsJson: #"{"type":"session","body":{}}"#)
+        )
+        let sB2 = timelineRecord(
+            messageIdHex: hex("52"),
+            groupIdHex: hex("bb"),
+            sender: agentB,
+            plaintext: "",
+            kind: MessageSemantics.kindAgentActivity,
+            timelineAt: 2,
+            agentItem: makeAgentItem(itemId: "sb2", itemType: "session", state: .running, title: "B2", fieldsJson: #"{"type":"session","body":{}}"#)
+        )
+        let sA3 = timelineRecord(
+            messageIdHex: hex("53"),
+            groupIdHex: hex("bb"),
+            sender: agentA,
+            plaintext: "",
+            kind: MessageSemantics.kindAgentActivity,
+            timelineAt: 3,
+            agentItem: makeAgentItem(itemId: "sa3", itemType: "session", state: .running, title: "A3", fieldsJson: #"{"type":"session","body":{}}"#)
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [sA1, sB2, sA3], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        #expect(viewModel.latestAgentSessions.map(\.messageIdHex) == [hex("52"), hex("53")])
+    }
+
     // MARK: - Helpers
 
     private func makeAgentItem(
