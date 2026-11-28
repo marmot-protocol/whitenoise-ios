@@ -2119,13 +2119,6 @@ final class TimelineStore {
         return undeliveredOwnMessageIds.contains(messageIdHex) ? messageIdHex : nil
     }
 
-    /// Whether a failed optimistic row still has staged local media — a media
-    /// send's optimistic record carries no imeta tags, so this projection is
-    /// the reliable media discriminator for retry gating.
-    func failedTransientRowHasStagedMedia(rowId: String) -> Bool {
-        mediaProjections.pending(forRowId: rowId)?.isEmpty == false
-    }
-
     /// The optimistic record still held for a failed outgoing row, if that
     /// row exists and is in the `.failed` state. Retry/discard key off the
     /// row id (`msg:<tempId>`), the only stable handle for an optimistic

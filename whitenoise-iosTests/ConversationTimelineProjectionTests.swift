@@ -2125,9 +2125,8 @@ struct ConversationTimelineProjectionTests {
         // A failed text row is retryable and discardable.
         #expect(viewModel.canRetryFailedSend(rowId: rowId))
 
-        // A failed media row (carrying the pending-media marker) is NOT
-        // retryable here — its compressed bytes aren't retained — but can
-        // still be discarded.
+        // A legacy media row (the pending-media marker with no staged bytes)
+        // can't be retried, but can still be discarded.
         let mediaTempId = "retry-media"
         let mediaRowId = "msg:\(mediaTempId)"
         let media = AppMessageRecordFfi(
@@ -2153,6 +2152,77 @@ struct ConversationTimelineProjectionTests {
         }
         #expect(!remaining.contains(rowId))
         #expect(remaining.contains(mediaRowId))
+    }
+
+    @Test func failedMediaSendRetriesWhileItsStagedBytesRemain() {
+        let groupIdHex = hex("aa")
+        let viewModel = ConversationViewModel(
+            appState: AppState.test(),
+            group: group(name: "", id: groupIdHex)
+        )
+        let tempId = "retry-staged-media"
+        let rowId = "msg:\(tempId)"
+        let record = AppMessageRecordFfi(
+            messageIdHex: "",
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: hex("11"),
+            plaintext: "",
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            recordedAt: 10,
+            receivedAt: 10
+        )
+        let draft = MediaDraftAttachment(fileName: "photo.jpg", mediaType: "image/jpeg", data: Data([1, 2, 3]), dim: "1x1")
+        viewModel.timelineStore.mediaProjections.setPending([draft.displayItem], forRowId: rowId)
+        viewModel.applyPendingOutgoingMessage(tempId: tempId, record: record)
+        viewModel.timelineStore.markFailed(tempId: tempId)
+
+        #expect(viewModel.canRetryFailedSend(rowId: rowId))
+        #expect(viewModel.canDiscardFailedSend(rowId: rowId))
+
+        // Once the staged bytes are gone the row degrades to discard-only.
+        viewModel.timelineStore.mediaProjections.removePending(forRowId: rowId)
+        #expect(!viewModel.canRetryFailedSend(rowId: rowId))
+        #expect(viewModel.canDiscardFailedSend(rowId: rowId))
+    }
+
+    @Test func failedMediaRetryResendsTheStagedAttachmentsWithTheirCaption() throws {
+        let record = AppMessageRecordFfi(
+            messageIdHex: "",
+            direction: "sent",
+            groupIdHex: hex("aa"),
+            sender: hex("11"),
+            plaintext: "caption",
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            recordedAt: 10,
+            receivedAt: 10
+        )
+        let photo = MediaDraftAttachment(
+            fileName: "photo.jpg", mediaType: "image/jpeg", data: Data([1, 2, 3]), dim: "4x3", thumbhash: "thumb"
+        )
+        let note = MediaDraftAttachment(
+            fileName: "note.m4a", mediaType: "audio/mp4", data: Data([4, 5]), dim: nil,
+            durationSeconds: 2, waveformSamples: [0.25, 0.5]
+        )
+
+        let retry = try #require(FailedSendRetry.payload(record: record, staged: [photo.displayItem, note.displayItem]))
+        guard case .media(let attachments, let caption) = retry else {
+            Issue.record("expected a media retry")
+            return
+        }
+        #expect(caption == record.plaintext)
+        #expect(attachments == [photo, note])
+        #expect(attachments.map(\.data) == [photo.data, note.data])
+        #expect(attachments.first?.thumbhash == photo.thumbhash)
+
+        // An attachment whose bytes were dropped makes the whole send discard-only,
+        // never a partial re-send.
+        let evicted = MessageMediaAttachment(
+            id: UUID().uuidString, reference: nil, fileName: "gone.jpg", mediaType: "image/jpeg", dim: nil, localData: nil
+        )
+        #expect(FailedSendRetry.payload(record: record, staged: [note.displayItem, evicted]) == nil)
     }
 
     @Test func projectedOutgoingMessageReplacesMatchingFailedPendingBubble() throws {

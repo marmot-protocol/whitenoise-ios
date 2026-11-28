@@ -309,6 +309,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     private(set) var localData: Data?
     private(set) var localDataToken: MediaDataContentToken?
     let thumbnail: UIImage?
+    let thumbhash: String?
     let durationSeconds: Double?
     let waveformSamples: [CGFloat]
     let rejectionKind: MediaAttachmentRejectionKindFfi?
@@ -330,7 +331,8 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         rejectionKind: MediaAttachmentRejectionKindFfi? = nil,
         localTarget: AttachmentLocalTargetFfi? = nil,
         displayIndex: UInt32? = nil,
-        localDataToken: MediaDataContentToken? = nil
+        localDataToken: MediaDataContentToken? = nil,
+        thumbhash: String? = nil
     ) {
         self.displayIndex = displayIndex
         self.id = id
@@ -346,6 +348,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
             return MediaDataContentToken(data: data)
         }
         self.thumbnail = thumbnail
+        self.thumbhash = thumbhash
         self.durationSeconds = durationSeconds
         self.waveformSamples = waveformSamples
         self.rejectionKind = rejectionKind
@@ -608,7 +611,29 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
             thumbnail: thumbnail,
             durationSeconds: durationSeconds,
             waveformSamples: waveformSamples,
-            localDataToken: dataToken
+            localDataToken: dataToken,
+            thumbhash: thumbhash
+        )
+    }
+
+    /// Rebuilds a failed send's attachment from its staged display item; nil
+    /// once its bytes are gone or it already names an uploaded reference.
+    init?(retrying item: MessageMediaAttachment) {
+        guard item.reference == nil,
+              let data = item.localData,
+              let id = UUID(uuidString: item.id)
+        else { return nil }
+        self.init(
+            id: id,
+            fileName: item.fileName,
+            mediaType: item.mediaType,
+            data: data,
+            dim: item.dim,
+            thumbhash: item.thumbhash,
+            thumbnail: item.thumbnail,
+            durationSeconds: item.durationSeconds,
+            waveformSamples: item.waveformSamples,
+            dataToken: item.localDataToken
         )
     }
 
