@@ -7,13 +7,55 @@ final class ToastState {
 
     @ObservationIgnored private var toastDismissTask: Task<Void, Never>?
     @ObservationIgnored private var expandedToastID: UUID?
+    @ObservationIgnored private var queued: [QueuedToast] = []
+    @ObservationIgnored private var activeOnSeen: (@MainActor () -> Void)?
+
+    private struct QueuedToast {
+        let toast: Toast
+        let onSeen: @MainActor () -> Void
+    }
 
     @MainActor
     func present(_ toast: Toast) {
+        if let active = activeToast, let onSeen = activeOnSeen {
+            queued.insert(QueuedToast(toast: active, onSeen: onSeen), at: 0)
+        }
+        show(toast, onSeen: nil)
+    }
+
+    /// Shows `toast` once nothing else is on screen and calls `onSeen` only
+    /// after it stayed up until it timed out or the user dismissed it; a toast
+    /// that replaces it first sends it back to the front of the queue.
+    @MainActor
+    func enqueue(_ toast: Toast, onSeen: @escaping @MainActor () -> Void) {
+        queued.append(QueuedToast(toast: toast, onSeen: onSeen))
+        if activeToast == nil { showNext() }
+    }
+
+    @MainActor
+    private func show(_ toast: Toast, onSeen: (@MainActor () -> Void)?) {
         toastDismissTask?.cancel()
         activeToast = toast
+        activeOnSeen = onSeen
         expandedToastID = nil
         scheduleDismissal(for: toast)
+    }
+
+    @MainActor
+    private func showNext() {
+        guard !queued.isEmpty else { return }
+        let next = queued.removeFirst()
+        show(next.toast, onSeen: next.onSeen)
+    }
+
+    @MainActor
+    private func finishActive() {
+        let onSeen = activeOnSeen
+        activeOnSeen = nil
+        expandedToastID = nil
+        activeToast = nil
+        onSeen?()
+        if activeToast == nil { showNext() }
     }
 
     @MainActor
@@ -35,7 +77,7 @@ final class ToastState {
                 guard !Task.isCancelled,
                       let self,
                       self.activeToast?.id == id else { return }
-                self.activeToast = nil
+                self.finishActive()
             }
         }
     }
@@ -43,8 +85,7 @@ final class ToastState {
     @MainActor
     func dismiss() {
         toastDismissTask?.cancel()
-        expandedToastID = nil
-        activeToast = nil
+        finishActive()
     }
 
     deinit {

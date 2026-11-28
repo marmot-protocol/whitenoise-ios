@@ -567,7 +567,7 @@ final class AppState {
             }
         }
         // An interrupted scan, or one with a failed read, runs again with the
-        // next runtime; raising the newest acknowledges it, so it won't repeat.
+        // next runtime; the newest is acknowledged once its toast has been seen.
         guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
         checkedRetainedUndeliveredChanges = readEverything
         if let newest { handleRuntimeEvent(newest.event, generation: generation) }
@@ -650,10 +650,15 @@ final class AppState {
               accounts.contains(where: { $0.accountIdHex == noticeAccountID && !$0.signedOut }),
               let notice = GroupChangeNotice.toast(for: event),
               refusedIntentAnnouncements.admit(event) else { return }
-        present(notice)
-        // MDK keeps a given-up change until the user has seen it.
-        if case .groupEvent(let accountID, _, let groupID, .groupChangeNotDelivered(let commitID, _, _)) = event,
-           let client = try? currentMarmotClient() {
+        // MDK keeps a given-up change until the user has seen it, so each one
+        // waits its turn and is acknowledged only once its toast was shown.
+        guard case .groupEvent(let accountID, _, let groupID, .groupChangeNotDelivered(let commitID, _, _)) = event
+        else {
+            present(notice)
+            return
+        }
+        toastState.enqueue(notice) { [weak self] in
+            guard let client = try? self?.currentMarmotClient() else { return }
             Task {
                 _ = try? await client.marmot.acknowledgeChangeNotDelivered(
                     accountRef: accountID, groupIdHex: groupID, commitIdHex: commitID
